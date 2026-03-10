@@ -1,8 +1,5 @@
 "use client";
 
-const FAST_API = process.env.NEXT_PUBLIC_FASTAPI_API!;
-const NEST_API = process.env.NEXT_PUBLIC_NEST_API!;
-
 import { useEffect, useState } from "react";
 
 export default function Home() {
@@ -10,14 +7,13 @@ export default function Home() {
   const [fastData, setFastData] = useState("");
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_NEST_API}`)
-      .then(res => res.json())
-      .then(data => setNestData(data.message));
+    fetch("/api/nest")
+      .then((res) => res.json())
+      .then((data) => setNestData(data.message ?? ""));
 
-
-    fetch(`${process.env.NEXT_PUBLIC_FASTAPI_API}/api`)
-      .then(res => res.json())
-      .then(data => setFastData(data.message));
+    fetch("/api/fastapi")
+      .then((res) => res.json())
+      .then((data) => setFastData(data.message ?? ""));
   }, []);
 
   return (

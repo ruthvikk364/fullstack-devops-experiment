@@ -21,6 +21,11 @@ services:
     build: ./frontend
     ports:
       - "3000:3000"
+    depends_on:
+      - nest
+      - fastapi
+    env_file:
+      - .env
     deploy:
       resources:
         limits:

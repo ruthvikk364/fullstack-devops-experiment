@@ -1,20 +1,27 @@
-version: "3.8"
-
 services:
   nest:
     build: ./backend-nest
     ports:
       - "5000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   fastapi:
     build: ./backend-fastapi
     ports:
       - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
-    depends_on:
-      - nest
-      - fastapi
+    deploy:
+      resources:
+        limits:
+          memory: 384M

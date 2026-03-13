@@ -1,28 +1,27 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import Navbar from "./components/Navbar";
+import Hero from "./components/Hero";
+import Features from "./components/Features";
+import HowItWorks from "./components/HowItWorks";
+import AiDemo from "./components/AiDemo";
+import Pricing from "./components/Pricing";
+import Testimonials from "./components/Testimonials";
+import Cta from "./components/Cta";
+import Footer from "./components/Footer";
 
 export default function Home() {
-  const [nestData, setNestData] = useState("");
-  const [fastData, setFastData] = useState("");
-
-  useEffect(() => {
-    fetch("/api/nest")
-      .then((res) => res.json())
-      .then((data) => setNestData(data.message ?? ""));
-
-    fetch("/api/fastapi")
-      .then((res) => res.json())
-      .then((data) => setFastData(data.message ?? ""));
-  }, []);
-
   return (
-    <div style={{ padding: "40px" }}>
-      <h1>Full Stack DevOps Test</h1>
-      <h2>NestJS Response:</h2>
-      <p>{nestData}</p>
-      <h2>FastAPI Response:</h2>
-      <p>{fastData}</p>
-    </div>
+    <>
+      <Navbar />
+      <main>
+        <Hero />
+        <Features />
+        <HowItWorks />
+        <AiDemo />
+        <Pricing />
+        <Testimonials />
+        <Cta />
+      </main>
+      <Footer />
+    </>
   );
 }

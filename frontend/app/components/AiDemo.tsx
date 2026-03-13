@@ -1,27 +1,24 @@
 import { Bot, User, Wrench, ChevronRight } from "lucide-react";
 
-interface Message {
+interface Msg {
   role: "user" | "ai";
   text: string;
   tool?: { name: string; detail: string };
 }
 
-const messages: Message[] = [
+const msgs: Msg[] = [
   {
     role: "user",
     text: "I want to build muscle but I have a shoulder injury. Can you make me a plan?",
   },
   {
     role: "ai",
-    text: "Of course! I\u2019ll design a program that works around your shoulder while maximising muscle growth.",
-    tool: {
-      name: "generate_workout_plan",
-      detail: "muscle_gain \u00b7 shoulder_injury \u00b7 4 days",
-    },
+    text: "Absolutely! I\u2019ll build a program that works around your shoulder while maximising muscle growth.",
+    tool: { name: "generate_workout_plan", detail: "muscle_gain \u00b7 shoulder_injury \u00b7 4d/wk" },
   },
   {
     role: "ai",
-    text: "Done! Here\u2019s your 4-day upper/lower split. I\u2019ve swapped overhead presses for landmine presses and replaced barbell bench with floor press to protect your shoulder ROM.",
+    text: "Here\u2019s your 4-day upper/lower split. I\u2019ve replaced overhead presses with landmine presses and swapped barbell bench for floor press to protect shoulder ROM. ~55 min/session.",
   },
   {
     role: "user",
@@ -29,132 +26,115 @@ const messages: Message[] = [
   },
   {
     role: "ai",
-    text: "Based on your 2,650 cal target and 180 g protein goal, here\u2019s what I\u2019d suggest for the rest of today:",
-    tool: {
-      name: "generate_meal_plan",
-      detail: "2650 kcal \u00b7 180 g protein \u00b7 2 meals left",
-    },
+    text: "You\u2019re at 94g protein so far today. To hit your 180g target with 2 meals left, here\u2019s what I\u2019d suggest:",
+    tool: { name: "generate_meal_plan", detail: "2650 kcal \u00b7 180g protein \u00b7 2 meals" },
   },
+];
+
+const bullets = [
+  "Understands injuries & physical limitations",
+  "Calls specialized tools for precise plan generation",
+  "Adapts in real-time to your feedback",
+  "Grounded in sports science via RAG knowledge base",
 ];
 
 export default function AiDemo() {
   return (
-    <section className="relative isolate py-24 sm:py-32">
-      {/* glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/[0.05] blur-[140px]"
-      />
+    <section className="relative py-[120px]">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[700px] rounded-full bg-emerald-500/[0.04] blur-[150px]" />
 
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
-          {/* ─── Copy ─── */}
+      <div className="section-container relative">
+        <div className="grid grid-cols-2 items-center gap-[80px]">
+          {/* Left copy */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
+            <p className="text-[12px] font-bold uppercase tracking-[0.25em] text-emerald-400">
               AI Coach in Action
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <h2 className="mt-4 text-[48px] font-bold leading-[1.1] tracking-tight">
               A coach that{" "}
               <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
                 truly understands
               </span>{" "}
               you
             </h2>
-            <p className="mt-4 text-base leading-relaxed text-zinc-400 sm:text-lg">
+            <p className="mt-5 max-w-[440px] text-[17px] leading-[1.7] text-zinc-400">
               TrainFree doesn&apos;t give generic advice. It uses intelligent
-              tool calling to generate real workout plans, calculate nutrition,
-              and adapt — all through natural conversation.
+              tool calling to generate real plans, calculate nutrition, and
+              adapt — all through natural conversation.
             </p>
-
-            <ul className="mt-8 space-y-3">
-              {[
-                "Understands injuries & limitations",
-                "Calls specialized tools for precise plans",
-                "Adapts in real-time to your feedback",
-                "Grounded in sports science via RAG",
-              ].map((item) => (
-                <li key={item} className="flex items-center gap-3">
+            <ul className="mt-8 space-y-4">
+              {bullets.map((b) => (
+                <li key={b} className="flex items-center gap-3">
                   <ChevronRight className="h-4 w-4 shrink-0 text-emerald-400" />
-                  <span className="text-sm text-zinc-300">{item}</span>
+                  <span className="text-[15px] text-zinc-300">{b}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* ─── Chat window ─── */}
-          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-            {/* title bar */}
-            <div className="flex items-center gap-2 border-b border-white/[0.04] px-5 py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-              <span className="ml-auto text-[11px] font-medium text-zinc-600">
+          {/* Right chat window */}
+          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0a0a0a]">
+            {/* Title bar */}
+            <div className="flex items-center gap-2 border-b border-white/[0.06] px-6 py-4">
+              <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+              <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+              <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+              <span className="ml-auto text-[12px] font-medium text-zinc-500">
                 TrainFree AI Coach
               </span>
             </div>
 
-            {/* messages */}
-            <div className="space-y-4 p-5">
-              {messages.map((m, i) => (
+            {/* Messages */}
+            <div className="space-y-5 p-6">
+              {msgs.map((m, i) => (
                 <div key={i} className="space-y-2">
-                  <div
-                    className={`flex items-start gap-3 ${
-                      m.role === "user" ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    {/* avatar */}
+                  <div className={`flex items-start gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
+                    {/* Avatar */}
                     <div
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${
-                        m.role === "ai"
-                          ? "bg-emerald-500/10"
-                          : "bg-zinc-800"
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        m.role === "ai" ? "bg-emerald-500/10" : "bg-zinc-800"
                       }`}
                     >
                       {m.role === "ai" ? (
-                        <Bot className="h-3.5 w-3.5 text-emerald-400" />
+                        <Bot className="h-4 w-4 text-emerald-400" />
                       ) : (
-                        <User className="h-3.5 w-3.5 text-zinc-400" />
+                        <User className="h-4 w-4 text-zinc-400" />
                       )}
                     </div>
 
-                    {/* bubble */}
+                    {/* Bubble */}
                     <div
-                      className={`max-w-[78%] rounded-xl px-3.5 py-2.5 ${
+                      className={`max-w-[80%] rounded-xl px-4 py-3 ${
                         m.role === "user"
-                          ? "border border-emerald-500/15 bg-emerald-500/[0.08]"
+                          ? "border border-emerald-500/15 bg-emerald-500/[0.06]"
                           : "border border-white/[0.06] bg-white/[0.03]"
                       }`}
                     >
-                      <p className="text-[13px] leading-relaxed text-zinc-300">
-                        {m.text}
-                      </p>
+                      <p className="text-[13px] leading-[1.6] text-zinc-300">{m.text}</p>
                     </div>
                   </div>
 
-                  {/* tool badge */}
                   {m.tool && (
-                    <div className="ml-10 inline-flex items-center gap-1.5 rounded-md border border-emerald-500/10 bg-emerald-500/[0.04] px-2.5 py-1">
-                      <Wrench className="h-3 w-3 text-emerald-400" />
-                      <code className="font-mono text-[11px] text-emerald-300">
-                        {m.tool.name}
-                      </code>
-                      <span className="text-[11px] text-zinc-600">
-                        {m.tool.detail}
+                    <div className={`${m.role === "user" ? "text-right mr-11" : "ml-11"}`}>
+                      <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.04] px-3 py-1.5">
+                        <Wrench className="h-3 w-3 text-emerald-400" />
+                        <code className="font-mono text-[11px] text-emerald-300">{m.tool.name}</code>
+                        <span className="text-[11px] text-zinc-600">{m.tool.detail}</span>
                       </span>
                     </div>
                   )}
                 </div>
               ))}
 
-              {/* typing indicator */}
+              {/* Typing */}
               <div className="flex items-start gap-3">
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-emerald-500/10">
-                  <Bot className="h-3.5 w-3.5 text-emerald-400" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                  <Bot className="h-4 w-4 text-emerald-400" />
                 </div>
-                <div className="flex gap-1 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:150ms]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:300ms]" />
+                <div className="flex gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3.5">
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-600 [animation-delay:0ms]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-600 [animation-delay:150ms]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-600 [animation-delay:300ms]" />
                 </div>
               </div>
             </div>

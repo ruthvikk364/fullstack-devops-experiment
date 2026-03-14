@@ -157,19 +157,19 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1, duration: 0.4 }}
-        className="bg-gradient-to-br from-violet-500/15 to-violet-900/10 border border-violet-500/20 rounded-2xl p-5 backdrop-blur-sm"
+        className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5"
       >
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center shadow-lg shadow-violet-500/20">
-            <span className="text-xl font-bold text-white">{initials}</span>
+          <div className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center">
+            <span className="text-lg font-bold text-white">{initials}</span>
           </div>
           <div className="flex-1">
             <h3 className="text-white font-bold text-lg tracking-tight">{profile.name || "User"}</h3>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-medium uppercase tracking-wider">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-300 font-medium uppercase tracking-wider">
                 {goalLabel}
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 font-medium">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-white/40 font-medium">
                 {profile.diet_preference || "—"}
               </span>
             </div>
@@ -177,21 +177,21 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="bg-black/20 rounded-xl p-3 text-center">
+          <div className="bg-white/[0.03] rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-white">{profile.weight_kg || "—"}</p>
             <p className="text-[10px] text-white/30 mt-0.5">Weight (kg)</p>
           </div>
-          <div className="bg-black/20 rounded-xl p-3 text-center">
+          <div className="bg-white/[0.03] rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-white">{profile.height_cm || "—"}</p>
             <p className="text-[10px] text-white/30 mt-0.5">Height (cm)</p>
           </div>
-          <div className="bg-black/20 rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-violet-400">{profile.target_weight_kg || "—"}</p>
+          <div className="bg-white/[0.03] rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-orange-400">{profile.target_weight_kg || "—"}</p>
             <p className="text-[10px] text-white/30 mt-0.5">Target (kg)</p>
           </div>
-          <div className="bg-black/20 rounded-xl p-3 text-center">
-            <p className="text-lg font-bold text-violet-300">{profile.bmi?.bmi_value?.toFixed(1) || "—"}</p>
-            <p className="text-[10px] text-white/30 mt-0.5">BMI{profile.bmi ? ` — ${profile.bmi.category}` : ""}</p>
+          <div className="bg-white/[0.03] rounded-xl p-3 text-center">
+            <p className="text-lg font-bold text-white">{profile.bmi?.bmi_value?.toFixed(1) || "—"}</p>
+            <p className="text-[10px] text-white/30 mt-0.5">BMI{profile.bmi ? ` · ${profile.bmi.category}` : ""}</p>
           </div>
         </div>
 
@@ -207,33 +207,31 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2, duration: 0.4 }}
-          className="bg-gradient-to-br from-emerald-500/10 to-emerald-900/5 border border-emerald-500/15 rounded-2xl p-5 backdrop-blur-sm"
+          className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5"
         >
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-              <Activity className="w-4.5 h-4.5 text-emerald-400" />
-            </div>
+            <Activity className="w-4 h-4 text-white/50" />
             <div>
               <h3 className="text-white font-semibold text-sm">Daily Nutrition Target</h3>
-              <p className="text-emerald-300/50 text-[10px]">{profile.bmi.strategy}</p>
+              <p className="text-white/35 text-[10px]">{profile.bmi.strategy}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-4 gap-2">
-            <div className="bg-black/20 rounded-xl p-2.5 text-center">
+            <div className="bg-white/[0.03] rounded-xl p-2.5 text-center">
               <p className="text-xl font-bold text-orange-400">{profile.bmi.daily_calories}</p>
               <p className="text-[9px] text-white/30 mt-0.5">Calories</p>
             </div>
-            <div className="bg-black/20 rounded-xl p-2.5 text-center">
-              <p className="text-xl font-bold text-blue-400">{profile.bmi.daily_protein_g}g</p>
+            <div className="bg-white/[0.03] rounded-xl p-2.5 text-center">
+              <p className="text-xl font-bold text-white">{profile.bmi.daily_protein_g}g</p>
               <p className="text-[9px] text-white/30 mt-0.5">Protein</p>
             </div>
-            <div className="bg-black/20 rounded-xl p-2.5 text-center">
-              <p className="text-xl font-bold text-yellow-400">{profile.bmi.daily_carbs_g}g</p>
+            <div className="bg-white/[0.03] rounded-xl p-2.5 text-center">
+              <p className="text-xl font-bold text-white">{profile.bmi.daily_carbs_g}g</p>
               <p className="text-[9px] text-white/30 mt-0.5">Carbs</p>
             </div>
-            <div className="bg-black/20 rounded-xl p-2.5 text-center">
-              <p className="text-xl font-bold text-pink-400">{profile.bmi.daily_fat_g}g</p>
+            <div className="bg-white/[0.03] rounded-xl p-2.5 text-center">
+              <p className="text-xl font-bold text-white">{profile.bmi.daily_fat_g}g</p>
               <p className="text-[9px] text-white/30 mt-0.5">Fat</p>
             </div>
           </div>
@@ -247,12 +245,12 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.3, duration: 0.4 }}
           onClick={handleDownload}
-          whileHover={{ scale: 1.02, borderColor: "rgba(167,139,250,0.4)" }}
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          className="w-full bg-gradient-to-r from-violet-600/15 via-violet-500/10 to-emerald-600/15 border border-violet-500/15 rounded-2xl p-5 flex items-center gap-4 text-left transition-all group cursor-pointer"
+          className="w-full bg-white/[0.04] border border-white/[0.08] hover:border-orange-500/20 rounded-2xl p-5 flex items-center gap-4 text-left transition-all group cursor-pointer"
         >
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/30 to-violet-600/20 flex items-center justify-center group-hover:from-violet-500/40 transition-colors">
-            <Download className="w-5 h-5 text-violet-400" />
+          <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/15 transition-colors">
+            <Download className="w-5 h-5 text-orange-400" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-white font-semibold text-sm">Workout & Diet Plan</h3>
@@ -260,7 +258,7 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
               Download your personalized PDF with full workout schedule and meal plan
             </p>
           </div>
-          <div className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-medium group-hover:bg-violet-500/30 transition-colors">
+          <div className="shrink-0 px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-300 text-xs font-medium group-hover:bg-orange-500/15 transition-colors">
             PDF
           </div>
         </m.button>
@@ -272,13 +270,13 @@ function ProfileCards({ profile }: { profile: ProfileData }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="border border-white/5 rounded-2xl p-5 flex items-center gap-4"
+          className="border border-white/[0.06] rounded-2xl p-5 flex items-center gap-4"
         >
-          <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center">
             <m.div
               animate={{ rotate: 360 }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              className="w-5 h-5 border-2 border-violet-400/30 border-t-violet-400 rounded-full"
+              className="w-5 h-5 border-2 border-orange-400/30 border-t-orange-400 rounded-full"
             />
           </div>
           <div>
@@ -1436,138 +1434,139 @@ export default function VoiceInterface({
 
           {isMika ? (
             /* ══════════ MIKA — UNIFIED: orb + transcript + chat ══════════ */
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Center: Orb + Waveform + Status (hidden when conversation closed) */}
-              <div className={`flex flex-col items-center justify-start pt-6 relative min-h-0 transition-all duration-500 ${conversationClosed ? "h-0 overflow-hidden opacity-0" : "flex-1"}`}>
-                {/* Orb — click to toggle voice */}
-                <m.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{
-                    opacity: 1,
-                    scale: isListening ? 1.08 : 1,
-                  }}
-                  transition={{
-                    opacity: { delay: 0.2, duration: 0.6 },
-                    scale: {
-                      type: "spring",
-                      stiffness: 120,
-                      damping: 15,
-                    },
-                  }}
-                  className="cursor-pointer"
-                  onClick={toggleMikaVoice}
-                  title={isListening ? "Click to pause voice" : "Click for voice mode"}
-                >
-                  <ReactiveOrb
-                    color="#a78bfa"
-                    isActive={isListening}
-                    size={300}
-                  />
-                </m.div>
+            <div className="flex-1 flex min-h-0">
+              {/* Left side: Orb + chat (or full width when no profile yet) */}
+              <div className={`flex flex-col min-h-0 transition-all duration-500 ${onboardingComplete && profileData ? "w-1/2 border-r border-white/[0.06]" : "flex-1"}`}>
+                {/* Center: Orb + Waveform + Status (hidden when conversation closed) */}
+                <div className={`flex flex-col items-center justify-start pt-6 relative min-h-0 transition-all duration-500 ${conversationClosed ? "h-0 overflow-hidden opacity-0" : onboardingComplete && profileData ? "shrink-0" : "flex-1"}`}>
+                  {/* Orb — click to toggle voice */}
+                  <m.div
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{
+                      opacity: 1,
+                      scale: onboardingComplete && profileData ? 0.6 : isListening ? 1.08 : 1,
+                    }}
+                    transition={{
+                      opacity: { delay: 0.2, duration: 0.6 },
+                      scale: {
+                        type: "spring",
+                        stiffness: 120,
+                        damping: 15,
+                      },
+                    }}
+                    className="cursor-pointer"
+                    onClick={toggleMikaVoice}
+                    title={isListening ? "Click to pause voice" : "Click for voice mode"}
+                  >
+                    <ReactiveOrb
+                      color="#a78bfa"
+                      isActive={isListening}
+                      size={onboardingComplete && profileData ? 200 : 300}
+                    />
+                  </m.div>
 
-                <m.div
-                  initial={{ opacity: 0, scaleX: 0.6 }}
-                  animate={{ opacity: 1, scaleX: 1 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                  className="-mt-2"
-                >
-                  <Waveform
-                    isActive={isListening}
-                    color="#a78bfa"
-                    width={360}
-                    height={80}
-                  />
-                </m.div>
+                  <m.div
+                    initial={{ opacity: 0, scaleX: 0.6 }}
+                    animate={{ opacity: 1, scaleX: 1 }}
+                    transition={{ delay: 0.4, duration: 0.5 }}
+                    className="-mt-2"
+                  >
+                    <Waveform
+                      isActive={isListening}
+                      color="#a78bfa"
+                      width={onboardingComplete && profileData ? 240 : 360}
+                      height={onboardingComplete && profileData ? 50 : 80}
+                    />
+                  </m.div>
 
-                {/* Status */}
-                <div className="h-10 flex flex-col items-center justify-center mt-1">
-                  <AnimatePresence mode="wait">
-                    {transcript ? (
-                      <m.p
-                        key="transcript"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        className="text-sm text-white/50 text-center max-w-md"
-                      >
-                        &ldquo;{transcript}
-                        <m.span
-                          animate={{ opacity: [1, 0] }}
-                          transition={{ duration: 0.5, repeat: Infinity }}
-                          className="inline-block w-0.5 h-4 bg-violet-400 ml-0.5 align-middle"
-                        />
-                        &rdquo;
-                      </m.p>
-                    ) : isListening ? (
-                      <m.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-violet-400/50">
-                        Listening... tap orb to switch to chat
-                      </m.p>
-                    ) : (
-                      <m.p key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-white/20">
-                        {statusText || "Tap orb for voice mode"}
-                      </m.p>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Chat transcript — below listening, max 5 lines, autoscroll */}
-                <div
-                  ref={scrollContainerRef}
-                  className="w-full px-6 py-3 overflow-y-auto"
-                  style={{ overscrollBehavior: "contain", scrollbarWidth: "none", maxHeight: "7.5rem" }}
-                >
-                  <div className="max-w-2xl mx-auto">
-                    {(messages.length > 0 || agentTranscript) ? (
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>
-                      {messages.map((msg, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          {msg.role === "user" ? (
-                            <span className="text-violet-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
-                          ) : msg.role === "system" ? (
-                            <span className="text-emerald-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
-                          ) : (
-                            <span className="text-violet-50">{msg.content}</span>
-                          )}
-                        </span>
-                      ))}
-                      {agentTranscript && (
-                        <>
-                          {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          <span className="text-violet-50" style={{ opacity: 0.6 }}>{agentTranscript}</span>
-                        </>
+                  {/* Status */}
+                  <div className="h-10 flex flex-col items-center justify-center mt-1">
+                    <AnimatePresence mode="wait">
+                      {transcript ? (
+                        <m.p
+                          key="transcript"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          className="text-sm text-white/50 text-center max-w-md"
+                        >
+                          &ldquo;{transcript}
+                          <m.span
+                            animate={{ opacity: [1, 0] }}
+                            transition={{ duration: 0.5, repeat: Infinity }}
+                            className="inline-block w-0.5 h-4 bg-violet-400 ml-0.5 align-middle"
+                          />
+                          &rdquo;
+                        </m.p>
+                      ) : isListening ? (
+                        <m.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-violet-400/50">
+                          Listening... tap orb to switch to chat
+                        </m.p>
+                      ) : (
+                        <m.p key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-white/20">
+                          {statusText || "Tap orb for voice mode"}
+                        </m.p>
                       )}
-                      {isProcessing && (
-                        <>
-                          <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>
-                          <span className="inline-flex items-center" style={{ gap: 3, verticalAlign: "middle" }}>
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0s" }} />
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.2s" }} />
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.4s" }} />
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Chat transcript — below listening, max 5 lines, autoscroll */}
+                  <div
+                    ref={scrollContainerRef}
+                    className="w-full px-6 py-3 overflow-y-auto"
+                    style={{ overscrollBehavior: "contain", scrollbarWidth: "none", maxHeight: "7.5rem" }}
+                  >
+                    <div className="max-w-2xl mx-auto">
+                      {(messages.length > 0 || agentTranscript) ? (
+                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>
+                        {messages.map((msg, i) => (
+                          <span key={i}>
+                            {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                            {msg.role === "user" ? (
+                              <span className="text-violet-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
+                            ) : msg.role === "system" ? (
+                              <span className="text-emerald-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
+                            ) : (
+                              <span className="text-violet-50">{msg.content}</span>
+                            )}
                           </span>
-                        </>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-center text-white/20 text-sm">
-                      Connecting to Mika...
-                    </p>
-                  )}
-                    <div ref={messagesEndRef} />
+                        ))}
+                        {agentTranscript && (
+                          <>
+                            {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                            <span className="text-violet-50" style={{ opacity: 0.6 }}>{agentTranscript}</span>
+                          </>
+                        )}
+                        {isProcessing && (
+                          <>
+                            <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>
+                            <span className="inline-flex items-center" style={{ gap: 3, verticalAlign: "middle" }}>
+                              <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0s" }} />
+                              <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.2s" }} />
+                              <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.4s" }} />
+                            </span>
+                          </>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-center text-white/20 text-sm">
+                        Connecting to Mika...
+                      </p>
+                    )}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Profile cards — show as soon as profile data is ready (in parallel with chat) */}
-              {onboardingComplete && profileData && (
-                <div className={`px-6 pb-4 ${conversationClosed ? "flex-1 overflow-y-auto" : ""}`}>
-                  {conversationClosed && (
+                {/* Conversation closed message (shown in left pane) */}
+                {conversationClosed && onboardingComplete && profileData && (
+                  <div className="flex-1 flex flex-col items-center justify-center px-6">
                     <m.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="max-w-2xl mx-auto mb-6 text-center"
+                      className="text-center"
                     >
-                      <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium mb-3">
+                      <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/50 text-sm font-medium mb-3">
                         <CheckCircle2 className="w-4 h-4" />
                         Chat Ended
                       </div>
@@ -1576,25 +1575,22 @@ export default function VoiceInterface({
                         onClick={handleClose}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-500/20"
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium transition-all"
                       >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Home
                       </m.button>
                     </m.div>
-                  )}
-                  <ProfileCards profile={profileData} />
-                </div>
-              )}
-
-              {/* Chat input — visible until conversation is closed (stays during onboarding complete so user can say bye) */}
-              {!conversationClosed && (
-                <m.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.4 }}
-                  className="px-6 py-4 border-t border-white/5 bg-[#0a0a0a] shrink-0"
-                >
+                  </div>
+                )}
+                {/* Chat input — visible until conversation is closed */}
+                {!conversationClosed && (
+                  <m.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.4 }}
+                    className="px-6 py-4 border-t border-white/5 bg-[#0a0a0a] shrink-0"
+                  >
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -1626,7 +1622,15 @@ export default function VoiceInterface({
                       <Send className="w-4 h-4" />
                     </m.button>
                   </form>
-                </m.div>
+                  </m.div>
+                )}
+              </div>
+
+              {/* Right side: Profile cards (shown when profile is ready) */}
+              {onboardingComplete && profileData && (
+                <div className="w-1/2 overflow-y-auto relative z-20 py-4">
+                  <ProfileCards profile={profileData} />
+                </div>
               )}
             </div>
           ) : (

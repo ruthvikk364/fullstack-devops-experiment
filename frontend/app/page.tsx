@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { m, useScroll, useSpring, AnimatePresence } from "framer-motion";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
@@ -13,10 +14,19 @@ import Particles from "./components/Particles";
 import CursorTrail from "./components/CursorTrail";
 import LoadingScreen from "./components/LoadingScreen";
 
-export default function Home() {
+function HomeInner() {
+  const searchParams = useSearchParams();
   const [activeAgent, setActiveAgent] = useState<"mika" | "bheema" | null>(null);
   const [cardRect, setCardRect] = useState<CardRect>({ x: 0, y: 0, width: 300, height: 400 });
   const [heroReady, setHeroReady] = useState(false);
+
+  // Auto-launch agent from URL param (e.g. ?agent=bheema)
+  useEffect(() => {
+    const agent = searchParams.get("agent");
+    if (agent === "bheema" || agent === "mika") {
+      setActiveAgent(agent);
+    }
+  }, [searchParams]);
 
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
@@ -115,5 +125,13 @@ export default function Home() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
   );
 }

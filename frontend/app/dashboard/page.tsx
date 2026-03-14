@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { m, AnimatePresence, LazyMotion, domAnimation } from "framer-motion";
 import {
   ArrowLeft,
@@ -24,6 +24,8 @@ import {
   Sparkles,
   Medal,
   TrendingUp,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../components/AuthProvider";
@@ -174,6 +176,7 @@ export default function DashboardPage() {
   const [logWeightLoading, setLogWeightLoading] = useState(false);
   const [logWorkoutLoading, setLogWorkoutLoading] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showFullCalendar, setShowFullCalendar] = useState(false);
 
   const [trackedDays, setTrackedDays] = useState<
     Record<string, { workout?: boolean; weight?: number }>
@@ -290,6 +293,18 @@ export default function DashboardPage() {
     return days;
   };
 
+  // ─── Get current week days from calendar ──────────────────────
+  const getCurrentWeekDays = (calDays: DayData[]): DayData[] => {
+    const todayIndex = calDays.findIndex((d) => d.isToday);
+    if (todayIndex === -1) {
+      // If today isn't in this month view, show the first week
+      return calDays.slice(0, 7);
+    }
+    // Find the row (week) that contains today
+    const rowStart = Math.floor(todayIndex / 7) * 7;
+    return calDays.slice(rowStart, rowStart + 7);
+  };
+
   // ─── Weight chart SVG ─────────────────────────────────────────
   const renderWeightChart = () => {
     const history = progress?.weight_history || [];
@@ -308,7 +323,6 @@ export default function DashboardPage() {
       weight: wt,
     }));
 
-    // Smooth curve using cubic bezier
     const pathD = points.length <= 2
       ? points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
       : points.map((p, i) => {
@@ -328,20 +342,19 @@ export default function DashboardPage() {
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
         <defs>
           <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.4" />
-            <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+            <stop offset="0%" stopColor="#f97316" stopOpacity="0.3" />
+            <stop offset="50%" stopColor="#ea580c" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="#c2410c" stopOpacity="0" />
           </linearGradient>
           <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#c084fc" />
+            <stop offset="0%" stopColor="#f97316" />
+            <stop offset="100%" stopColor="#fb923c" />
           </linearGradient>
           <filter id="glow">
             <feGaussianBlur stdDeviation="3" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
-        {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map((frac, i) => {
           const y = padY + chartH * (1 - frac);
           const val = (minW + range * frac).toFixed(0);
@@ -352,7 +365,6 @@ export default function DashboardPage() {
             </g>
           );
         })}
-        {/* Target line */}
         {targetY !== null && targetY >= padY && targetY <= padY + chartH && (
           <>
             <line x1={padX} y1={targetY} x2={w - padX} y2={targetY} stroke="#fb923c" strokeDasharray="6 4" strokeOpacity="0.6" strokeWidth="1.5" />
@@ -360,23 +372,19 @@ export default function DashboardPage() {
             <text x={w - padX + 20} y={targetY + 4} fill="#fb923c" fontSize="9" textAnchor="middle" fontWeight="600">Goal</text>
           </>
         )}
-        {/* Area */}
         <path d={areaD} fill="url(#wg)" />
-        {/* Line with glow */}
         <path d={pathD} fill="none" stroke="url(#lineGrad)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow)" />
-        {/* Points */}
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="6" fill="rgba(139,92,246,0.3)" />
-            <circle cx={p.x} cy={p.y} r="4" fill="#8b5cf6" />
+            <circle cx={p.x} cy={p.y} r="6" fill="rgba(249,115,22,0.3)" />
+            <circle cx={p.x} cy={p.y} r="4" fill="#f97316" />
             <circle cx={p.x} cy={p.y} r="2" fill="white" />
           </g>
         ))}
-        {/* Labels */}
-        <rect x={points[0].x - 18} y={points[0].y - 22} width="36" height="16" rx="4" fill="rgba(139,92,246,0.2)" />
-        <text x={points[0].x} y={points[0].y - 11} fill="#c4b5fd" fontSize="10" textAnchor="middle" fontWeight="700">{points[0].weight}kg</text>
-        <rect x={points[points.length - 1].x - 18} y={points[points.length - 1].y - 22} width="36" height="16" rx="4" fill="rgba(139,92,246,0.2)" />
-        <text x={points[points.length - 1].x} y={points[points.length - 1].y - 11} fill="#c4b5fd" fontSize="10" textAnchor="middle" fontWeight="700">{points[points.length - 1].weight}kg</text>
+        <rect x={points[0].x - 18} y={points[0].y - 22} width="36" height="16" rx="4" fill="rgba(249,115,22,0.2)" />
+        <text x={points[0].x} y={points[0].y - 11} fill="#fdba74" fontSize="10" textAnchor="middle" fontWeight="700">{points[0].weight}kg</text>
+        <rect x={points[points.length - 1].x - 18} y={points[points.length - 1].y - 22} width="36" height="16" rx="4" fill="rgba(249,115,22,0.2)" />
+        <text x={points[points.length - 1].x} y={points[points.length - 1].y - 11} fill="#fdba74" fontSize="10" textAnchor="middle" fontWeight="700">{points[points.length - 1].weight}kg</text>
       </svg>
     );
   };
@@ -384,23 +392,23 @@ export default function DashboardPage() {
   // ─── Loading / no profile states ──────────────────────────────
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#080810] flex items-center justify-center">
-        <m.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} className="w-10 h-10 border-2 border-violet-400/40 border-t-violet-400 rounded-full" />
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <m.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} className="w-10 h-10 border-2 border-orange-400/40 border-t-orange-400 rounded-full" />
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#080810] flex flex-col items-center justify-center gap-6 px-6">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500/20 to-violet-600/10 border border-violet-500/25 flex items-center justify-center">
-          <Calendar className="w-9 h-9 text-violet-400" />
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-6 px-6">
+        <div className="w-20 h-20 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+          <Calendar className="w-9 h-9 text-orange-400" />
         </div>
         <div className="text-center">
           <h2 className="text-white text-2xl font-bold mb-2">No Profile Yet</h2>
-          <p className="text-white/50 text-sm max-w-sm">Talk to Mika first to complete your fitness profile. Then come back here to track your journey.</p>
+          <p className="text-white/50 text-sm max-w-sm">Talk to Bheema first to complete your fitness profile. Then come back here to track your journey.</p>
         </div>
-        <Link href="/" className="px-8 py-3 rounded-full bg-gradient-to-r from-violet-500 to-violet-600 text-white text-sm font-semibold hover:from-violet-400 hover:to-violet-500 transition-all shadow-lg shadow-violet-500/25">
+        <Link href="/" className="px-8 py-3 rounded-full bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-all">
           Go to Home
         </Link>
       </div>
@@ -414,194 +422,243 @@ export default function DashboardPage() {
   const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1].weight_kg : profile.weight_kg;
   const weightChange = currentWeight - startWeight;
   const calDays = buildCalendarDays();
+  const weekDays = getCurrentWeekDays(calDays);
+
+  const isNewUser = streak === 0 && totalWorkouts === 0;
+  const todayStr = formatDate(new Date());
+  const todayWorkoutDone = trackedDays[todayStr]?.workout || false;
 
   return (
     <LazyMotion features={domAnimation}>
-      <div className="min-h-screen bg-[#080810] text-white">
-        {/* ── Ambient background ── */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-1/2 -left-1/4 w-[800px] h-[800px] rounded-full bg-violet-600/[0.04] blur-[120px]" />
-          <div className="absolute -bottom-1/2 -right-1/4 w-[600px] h-[600px] rounded-full bg-orange-500/[0.03] blur-[100px]" />
-        </div>
-
+      <div className="min-h-screen bg-[#0a0a0a] text-white">
         {/* ── Top nav ── */}
-        <div className="sticky top-0 z-40 backdrop-blur-2xl bg-[#080810]/70 border-b border-white/[0.06]">
+        <div className="sticky top-0 z-40 backdrop-blur-2xl bg-[#0a0a0a]/80 border-b border-white/[0.06]">
           <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2.5 text-white/60 hover:text-white transition-colors text-sm group">
               <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
               <span>Home</span>
             </Link>
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-orange-500/20 flex items-center justify-center">
-                <Dumbbell className="w-3.5 h-3.5 text-orange-300" />
-              </div>
-              <span className="font-bold text-sm bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">Dashboard</span>
+              <Dumbbell className="w-4 h-4 text-orange-400" />
+              <span className="font-bold text-sm text-white">Dashboard</span>
             </div>
             <div className="w-16" />
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto px-6 py-8 space-y-7 relative">
-          {/* ── Welcome + Streak hero ── */}
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 relative">
+          {/* ── Welcome header ── */}
           <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">
-                  Welcome back,{" "}
-                  <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-orange-400 bg-clip-text text-transparent">{profile.name}</span>
+                <h1 className="text-3xl font-bold tracking-tight text-white">
+                  Welcome back, {profile.name}
                 </h1>
                 <p className="text-white/40 text-sm mt-1.5 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-300 text-[11px] font-medium">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-300 text-[11px] font-medium">
                     {profile.fitness_goal?.replace("_", " ") || "General fitness"}
                   </span>
                   <span className="text-white/20">&middot;</span>
                   <span className="text-white/40">{profile.diet_preference || "—"}</span>
                 </p>
               </div>
-              {streak > 0 && (
-                <m.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500/20 via-orange-500/10 to-amber-500/5 border border-orange-400/25 shadow-lg shadow-orange-500/10"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-orange-500/30">
-                    <Flame className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <span className="text-orange-200 font-bold text-2xl leading-none">{streak}</span>
-                    <p className="text-orange-300/50 text-[10px] font-medium">day streak</p>
-                  </div>
-                </m.div>
-              )}
             </div>
           </m.div>
 
-          {/* ── Stats grid ── */}
+          {/* ── Streak + action buttons row ── */}
           <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-            className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+            transition={{ delay: 0.05, duration: 0.5 }}
+            className="flex items-center justify-between flex-wrap gap-4"
           >
-            {/* Streak */}
-            <div className="bg-gradient-to-br from-orange-500/[0.08] to-orange-600/[0.02] border border-orange-400/15 rounded-2xl p-5 group hover:border-orange-400/30 transition-all">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500/30 to-orange-600/15 flex items-center justify-center">
-                  <Flame className="w-4.5 h-4.5 text-orange-400" />
+            {!isNewUser && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center flex-shrink-0">
+                  <Flame className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-[11px] text-orange-300/50 uppercase tracking-wider font-semibold">Streak</span>
-              </div>
-              <p className="text-3xl font-bold text-white">{streak}</p>
-              <p className="text-[11px] text-white/30 mt-0.5">days</p>
-            </div>
-            {/* Workouts */}
-            <div className="bg-gradient-to-br from-violet-500/[0.08] to-violet-600/[0.02] border border-violet-400/15 rounded-2xl p-5 group hover:border-violet-400/30 transition-all">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/30 to-violet-600/15 flex items-center justify-center">
-                  <Dumbbell className="w-4.5 h-4.5 text-violet-400" />
+                <div>
+                  <p className="text-2xl font-bold text-white leading-none">{streak}</p>
+                  <p className="text-white/40 text-xs">day streak</p>
                 </div>
-                <span className="text-[11px] text-violet-300/50 uppercase tracking-wider font-semibold">Workouts</span>
               </div>
-              <p className="text-3xl font-bold text-white">{totalWorkouts}</p>
-              <p className="text-[11px] text-white/30 mt-0.5">completed</p>
-            </div>
-            {/* Weight Change */}
-            <div className="bg-gradient-to-br from-emerald-500/[0.08] to-emerald-600/[0.02] border border-emerald-400/15 rounded-2xl p-5 group hover:border-emerald-400/30 transition-all">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/30 to-emerald-600/15 flex items-center justify-center">
-                  {weightChange <= 0 ? <TrendingDown className="w-4.5 h-4.5 text-emerald-400" /> : <TrendingUp className="w-4.5 h-4.5 text-emerald-400" />}
-                </div>
-                <span className="text-[11px] text-emerald-300/50 uppercase tracking-wider font-semibold">Weight</span>
-              </div>
-              <p className="text-3xl font-bold text-white">{weightChange > 0 ? "+" : ""}{weightChange.toFixed(1)}</p>
-              <p className="text-[11px] text-white/30 mt-0.5">kg change</p>
-            </div>
-            {/* BMI */}
-            <div className="bg-gradient-to-br from-blue-500/[0.08] to-blue-600/[0.02] border border-blue-400/15 rounded-2xl p-5 group hover:border-blue-400/30 transition-all">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-600/15 flex items-center justify-center">
-                  <Activity className="w-4.5 h-4.5 text-blue-400" />
-                </div>
-                <span className="text-[11px] text-blue-300/50 uppercase tracking-wider font-semibold">BMI</span>
-              </div>
-              <p className="text-3xl font-bold text-white">{profile.bmi?.bmi_value?.toFixed(1) || "—"}</p>
-              <p className="text-[11px] text-white/30 mt-0.5">{profile.bmi?.category || "—"}</p>
+            )}
+            <div className="flex flex-wrap gap-3 ml-auto">
+              <Link
+                href="/?agent=bheema"
+                className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-colors"
+              >
+                <Dumbbell className="w-4 h-4" />
+                Train with Bheema
+              </Link>
+              <button
+                onClick={() => setShowWeightModal(true)}
+                className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl border border-white/[0.12] text-white/70 text-sm font-medium hover:bg-white/[0.04] hover:text-white transition-all"
+              >
+                <Scale className="w-4 h-4" />
+                Log Weight
+              </button>
             </div>
           </m.div>
+
+          {/* ── Zero-state OR stats ── */}
+          {isNewUser ? (
+            <m.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
+              className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-8"
+            >
+              <div className="max-w-md">
+                <h2 className="text-2xl font-bold text-white mb-2">Ready for Day 1?</h2>
+                <p className="text-white/40 text-sm mb-6">
+                  Start your first workout to begin tracking streaks, weight, and progress. Your journey starts with a single step.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/?agent=bheema"
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-colors"
+                  >
+                    <Dumbbell className="w-4 h-4" />
+                    Start Workout with Bheema
+                  </Link>
+                  <button
+                    onClick={() => setShowWeightModal(true)}
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl border border-white/[0.12] text-white/70 text-sm font-medium hover:bg-white/[0.04] hover:text-white transition-all"
+                  >
+                    <Scale className="w-4 h-4" />
+                    Log Weight
+                  </button>
+                </div>
+              </div>
+            </m.div>
+          ) : (
+            <>
+              {/* ── Compact stats row ── */}
+              <m.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.5 }}
+                className="grid grid-cols-3 gap-3"
+              >
+                <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Dumbbell className="w-3.5 h-3.5 text-white/50" />
+                    <span className="text-[11px] text-white/40 uppercase tracking-wider font-medium">Workouts</span>
+                  </div>
+                  <p className="text-xl font-bold text-white">{totalWorkouts}</p>
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    {weightChange <= 0 ? <TrendingDown className="w-3.5 h-3.5 text-white/50" /> : <TrendingUp className="w-3.5 h-3.5 text-white/50" />}
+                    <span className="text-[11px] text-white/40 uppercase tracking-wider font-medium">Weight</span>
+                  </div>
+                  <p className="text-xl font-bold text-white">{weightChange > 0 ? "+" : ""}{weightChange.toFixed(1)}<span className="text-sm text-white/40 font-normal ml-0.5">kg</span></p>
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="w-3.5 h-3.5 text-white/50" />
+                    <span className="text-[11px] text-white/40 uppercase tracking-wider font-medium">BMI</span>
+                  </div>
+                  <p className="text-xl font-bold text-white">{profile.bmi?.bmi_value?.toFixed(1) || "—"}</p>
+                </div>
+              </m.div>
+            </>
+          )}
 
           {/* ── Calendar ── */}
           <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
+            className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6"
           >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-bold flex items-center gap-2.5 text-lg">
-                <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-violet-400" />
-                </div>
+            {/* Calendar header with actions */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold flex items-center gap-2.5 text-base">
+                <Calendar className="w-4 h-4 text-white/50" />
                 Your Journey
               </h2>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else { setCalMonth(calMonth - 1); } }}
-                  className="p-2 rounded-xl hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
+                  className="p-2 rounded-lg hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-semibold min-w-[140px] text-center text-white/80">{MONTH_NAMES[calMonth]} {calYear}</span>
+                <span className="text-sm font-medium min-w-[130px] text-center text-white/70">{MONTH_NAMES[calMonth]} {calYear}</span>
                 <button
                   onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else { setCalMonth(calMonth + 1); } }}
-                  className="p-2 rounded-xl hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
+                  className="p-2 rounded-lg hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
+            {/* Inline action buttons */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => handleLogWorkout()}
+                disabled={logWorkoutLoading || todayWorkoutDone}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-medium hover:bg-orange-500/15 transition-all disabled:opacity-40"
+              >
+                {todayWorkoutDone ? <Check className="w-3.5 h-3.5" /> : <Dumbbell className="w-3.5 h-3.5" />}
+                {todayWorkoutDone ? "Workout Logged" : "Log Workout"}
+              </button>
+              <button
+                onClick={() => setShowWeightModal(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-xs font-medium hover:bg-white/[0.06] transition-all"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                Log Weight
+              </button>
+            </div>
+
             {/* Day labels */}
-            <div className="grid grid-cols-7 gap-1.5 mb-2">
+            <div className="grid grid-cols-7 gap-1.5 mb-1.5">
               {DAY_LABELS.map((d) => (
-                <div key={d} className="text-center text-[11px] text-white/30 font-semibold py-1.5">{d}</div>
+                <div key={d} className="text-center text-[11px] text-white/30 font-medium py-1">{d}</div>
               ))}
             </div>
 
-            {/* Calendar grid */}
+            {/* Week strip (default) or full calendar */}
             <div className="grid grid-cols-7 gap-1.5">
-              {calDays.map((day, i) => {
+              {(showFullCalendar ? calDays : weekDays).map((day, i) => {
                 const isSelected = selectedDay?.dateStr === day.dateStr;
                 return (
                   <m.button
-                    key={i}
-                    whileHover={{ scale: 1.1 }}
+                    key={`${day.dateStr}-${i}`}
+                    whileHover={{ scale: 1.08 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setSelectedDay(isSelected ? null : day)}
-                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center text-xs font-medium transition-all ${
+                    className={`relative rounded-lg flex flex-col items-center justify-center text-xs font-medium transition-all ${
+                      showFullCalendar ? "aspect-square" : "py-3"
+                    } ${
                       !day.isCurrentMonth
                         ? "opacity-15 text-white/30"
                         : day.isToday
-                          ? "bg-gradient-to-br from-violet-500/30 to-violet-600/15 border border-violet-400/40 text-violet-200 font-bold shadow-md shadow-violet-500/10"
+                          ? "bg-orange-500/15 border border-orange-400/30 text-orange-200 font-bold"
                           : day.hasWorkout
-                            ? "bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-400/30 text-emerald-200"
+                            ? "bg-white/[0.06] border border-orange-400/20 text-white/80"
                             : day.hasWeight
-                              ? "bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-400/20 text-blue-200"
+                              ? "bg-white/[0.04] border border-white/[0.08] text-white/60"
                               : day.isPast
-                                ? "bg-white/[0.03] text-white/40 hover:bg-white/[0.06]"
+                                ? "bg-white/[0.02] text-white/40 hover:bg-white/[0.04]"
                                 : day.isFuture
-                                  ? "bg-white/[0.015] text-white/20"
-                                  : "bg-white/[0.04] text-white/60 hover:bg-white/[0.07]"
-                    } ${isSelected ? "ring-2 ring-violet-400/60 ring-offset-2 ring-offset-[#080810]" : ""}`}
+                                  ? "bg-white/[0.01] text-white/20"
+                                  : "bg-white/[0.03] text-white/60 hover:bg-white/[0.05]"
+                    } ${isSelected ? "ring-2 ring-orange-400/50 ring-offset-1 ring-offset-[#0a0a0a]" : ""}`}
                   >
                     <span>{day.date.getDate()}</span>
                     {day.hasWorkout && (
-                      <div className="absolute bottom-1">
-                        <Check className="w-2.5 h-2.5 text-emerald-400" />
+                      <div className="absolute bottom-0.5">
+                        <Check className="w-2.5 h-2.5 text-orange-400" />
                       </div>
                     )}
                     {day.hasWeight && !day.hasWorkout && (
-                      <div className="absolute bottom-1">
-                        <Scale className="w-2.5 h-2.5 text-blue-400" />
+                      <div className="absolute bottom-0.5">
+                        <Scale className="w-2.5 h-2.5 text-white/40" />
                       </div>
                     )}
                   </m.button>
@@ -609,19 +666,37 @@ export default function DashboardPage() {
               })}
             </div>
 
+            {/* Show full month toggle */}
+            <button
+              onClick={() => setShowFullCalendar(!showFullCalendar)}
+              className="flex items-center gap-1.5 mx-auto mt-3 text-[11px] text-white/35 hover:text-white/50 transition-colors"
+            >
+              {showFullCalendar ? (
+                <>
+                  <ChevronUp className="w-3 h-3" />
+                  Show week only
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3 h-3" />
+                  Show full month
+                </>
+              )}
+            </button>
+
             {/* Legend */}
-            <div className="flex items-center gap-6 mt-5 text-[11px] text-white/35">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-emerald-500/40 to-emerald-600/20 border border-emerald-400/30" />
-                Workout done
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-violet-500/40 to-violet-600/20 border border-violet-400/30" />
+            <div className="flex items-center gap-5 mt-3 text-[11px] text-white/30">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded bg-orange-500/30 border border-orange-400/30" />
                 Today
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-blue-500/30 to-blue-600/15 border border-blue-400/25" />
-                Weight logged
+              <div className="flex items-center gap-1.5">
+                <Check className="w-2.5 h-2.5 text-orange-400" />
+                Workout
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Scale className="w-2.5 h-2.5 text-white/40" />
+                Weight
               </div>
             </div>
 
@@ -629,17 +704,17 @@ export default function DashboardPage() {
             <AnimatePresence>
               {selectedDay && selectedDay.isCurrentMonth && (
                 <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                  <div className="mt-5 pt-5 border-t border-white/[0.06]">
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-semibold text-white/80">
+                      <p className="text-sm font-medium text-white/70">
                         {selectedDay.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                       </p>
                       <div className="flex items-center gap-2">
                         {selectedDay.hasWorkout && (
-                          <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/20 font-medium">Workout done</span>
+                          <span className="text-[11px] px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-300 border border-orange-400/15 font-medium">Workout done</span>
                         )}
                         {selectedDay.hasWeight && (
-                          <span className="text-[11px] px-3 py-1 rounded-full bg-blue-500/15 text-blue-300 border border-blue-400/20 font-medium">{selectedDay.weight?.toFixed(1)} kg</span>
+                          <span className="text-[11px] px-2.5 py-1 rounded-full bg-white/[0.06] text-white/50 border border-white/[0.08] font-medium">{selectedDay.weight?.toFixed(1)} kg</span>
                         )}
                       </div>
                     </div>
@@ -647,7 +722,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => handleLogWorkout(selectedDay.dateStr)}
                         disabled={logWorkoutLoading}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500/15 to-emerald-600/10 border border-emerald-400/25 text-emerald-300 text-xs font-semibold hover:from-emerald-500/25 hover:to-emerald-600/15 transition-all disabled:opacity-40"
+                        className="w-full py-2.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-medium hover:bg-orange-500/15 transition-all disabled:opacity-40"
                       >
                         {logWorkoutLoading ? "Logging..." : "Mark Workout Complete"}
                       </button>
@@ -664,19 +739,17 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
-              className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
+              className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6"
             >
               <div className="flex items-center justify-between mb-5">
-                <h2 className="font-bold flex items-center gap-2.5 text-lg">
-                  <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-                    <Scale className="w-4 h-4 text-violet-400" />
-                  </div>
+                <h2 className="font-bold flex items-center gap-2.5 text-base">
+                  <Scale className="w-4 h-4 text-white/50" />
                   Weight Progress
                 </h2>
                 <div className="flex items-center gap-4 text-xs">
                   <span className="flex items-center gap-1.5 text-white/40">Start: <strong className="text-white/70">{startWeight}kg</strong></span>
                   <span className="text-white/15">&rarr;</span>
-                  <span className="flex items-center gap-1.5 text-white/40">Now: <strong className="text-violet-400">{currentWeight}kg</strong></span>
+                  <span className="flex items-center gap-1.5 text-white/40">Now: <strong className="text-orange-400">{currentWeight}kg</strong></span>
                   {profile.target_weight_kg && (
                     <>
                       <span className="text-white/15">&rarr;</span>
@@ -689,63 +762,15 @@ export default function DashboardPage() {
             </m.div>
           )}
 
-          {/* ── Quick Actions ── */}
-          <m.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.5 }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-          >
-            <m.button
-              onClick={() => setShowWeightModal(true)}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-gradient-to-br from-violet-500/[0.08] to-violet-600/[0.02] border border-violet-400/20 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-violet-400/35 transition-all group cursor-pointer"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/30 to-violet-600/15 flex items-center justify-center group-hover:from-violet-500/40 transition-colors shadow-lg shadow-violet-500/10">
-                <Scale className="w-5 h-5 text-violet-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Log Weight</p>
-                <p className="text-[11px] text-white/35 mt-0.5">Track your daily weight</p>
-              </div>
-            </m.button>
-            <m.button
-              onClick={() => handleLogWorkout()}
-              disabled={logWorkoutLoading || trackedDays[formatDate(new Date())]?.workout}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-gradient-to-br from-emerald-500/[0.08] to-emerald-600/[0.02] border border-emerald-400/20 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-emerald-400/35 transition-all group disabled:opacity-40 cursor-pointer"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/30 to-emerald-600/15 flex items-center justify-center group-hover:from-emerald-500/40 transition-colors shadow-lg shadow-emerald-500/10">
-                {trackedDays[formatDate(new Date())]?.workout ? (
-                  <Check className="w-5 h-5 text-emerald-400" />
-                ) : (
-                  <Dumbbell className="w-5 h-5 text-emerald-400" />
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  {trackedDays[formatDate(new Date())]?.workout ? "Workout Logged Today" : "Log Today's Workout"}
-                </p>
-                <p className="text-[11px] text-white/35 mt-0.5">
-                  {trackedDays[formatDate(new Date())]?.workout ? "Great job! Keep it up" : "Mark today as done"}
-                </p>
-              </div>
-            </m.button>
-          </m.div>
-
           {/* ── Rewards & Milestones ── */}
           <m.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.5 }}
-            className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
+            className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6"
           >
-            <h2 className="font-bold flex items-center gap-2.5 text-lg mb-6">
-              <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
-                <Trophy className="w-4 h-4 text-orange-400" />
-              </div>
+            <h2 className="font-bold flex items-center gap-2.5 text-base mb-6">
+              <Trophy className="w-4 h-4 text-white/50" />
               Rewards & Milestones
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -760,15 +785,13 @@ export default function DashboardPage() {
                     className={`relative rounded-2xl p-5 text-center transition-all overflow-hidden ${
                       unlocked
                         ? `${ms.bg} border ${ms.border} shadow-lg ${ms.glow}`
-                        : `bg-gradient-to-br from-white/[0.04] to-white/[0.015] border border-white/[0.08] hover:border-white/[0.12]`
+                        : `bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.1]`
                     }`}
                   >
-                    {/* Unlocked glow effect */}
                     {unlocked && (
                       <div className={`absolute inset-0 bg-gradient-to-br ${ms.gradient} opacity-[0.06] pointer-events-none`} />
                     )}
 
-                    {/* Icon */}
                     <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3 relative ${
                       unlocked
                         ? `bg-gradient-to-br ${ms.gradient} shadow-xl ${ms.glow}`
@@ -776,13 +799,12 @@ export default function DashboardPage() {
                     }`}>
                       <Icon className={`w-6 h-6 ${unlocked ? "text-white" : ms.text} ${!unlocked ? "opacity-60" : ""}`} />
                       {!unlocked && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#12121a] border border-white/10 flex items-center justify-center">
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#0a0a0a] border border-white/10 flex items-center justify-center">
                           <Lock className="w-2.5 h-2.5 text-white/40" />
                         </div>
                       )}
                     </div>
 
-                    {/* Title */}
                     <p className={`text-xs font-bold ${unlocked ? ms.text : "text-white/60"}`}>
                       {ms.title}
                     </p>
@@ -790,12 +812,11 @@ export default function DashboardPage() {
                       {ms.subtitle}
                     </p>
 
-                    {/* Coupon for unlocked */}
                     {unlocked && ms.reward && (
                       <m.div
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mt-3 px-3 py-2 rounded-xl bg-gradient-to-r from-black/40 to-black/20 border border-white/[0.08]"
+                        className="mt-3 px-3 py-2 rounded-xl bg-black/40 border border-white/[0.06]"
                       >
                         <div className="flex items-center justify-center gap-1.5">
                           <Gift className="w-3.5 h-3.5 text-orange-400" />
@@ -805,7 +826,6 @@ export default function DashboardPage() {
                       </m.div>
                     )}
 
-                    {/* Progress for locked */}
                     {!unlocked && (
                       <div className="mt-3">
                         <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
@@ -822,7 +842,6 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {/* Unlocked sparkle */}
                     {unlocked && (
                       <div className="absolute top-2 right-2">
                         <Sparkles className={`w-4 h-4 ${ms.text} opacity-50`} />
@@ -840,13 +859,11 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45, duration: 0.5 }}
-              className="bg-gradient-to-br from-violet-500/[0.06] via-purple-500/[0.03] to-orange-500/[0.06] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
+              className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6"
             >
               <div className="flex items-center gap-2.5 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-orange-400" />
-                </div>
-                <h2 className="font-bold text-lg">Goal Progress</h2>
+                <Target className="w-4 h-4 text-white/50" />
+                <h2 className="font-bold text-base">Goal Progress</h2>
               </div>
               {(() => {
                 const totalToLose = Math.abs(startWeight - profile.target_weight_kg);
@@ -856,21 +873,19 @@ export default function DashboardPage() {
                   <div>
                     <div className="flex items-center justify-between text-sm mb-3">
                       <span className="text-white/50 font-medium">{startWeight}kg</span>
-                      <span className="text-violet-300 font-bold text-lg">{currentWeight}kg</span>
+                      <span className="text-white font-bold text-lg">{currentWeight}kg</span>
                       <span className="text-orange-400 font-semibold">{profile.target_weight_kg}kg</span>
                     </div>
-                    <div className="h-4 bg-white/[0.06] rounded-full overflow-hidden relative">
+                    <div className="h-3 bg-white/[0.06] rounded-full overflow-hidden relative">
                       <m.div
                         initial={{ width: 0 }}
                         animate={{ width: `${pct}%` }}
                         transition={{ duration: 1.2, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-orange-500 relative"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                      </m.div>
+                        className="h-full rounded-full bg-orange-500 relative"
+                      />
                     </div>
                     <p className="text-xs text-white/35 mt-3 text-center font-medium">
-                      <span className="text-violet-400">{pct.toFixed(0)}%</span> of the way there &middot; {Math.abs(currentWeight - profile.target_weight_kg).toFixed(1)}kg to go
+                      <span className="text-orange-400">{pct.toFixed(0)}%</span> of the way there &middot; {Math.abs(currentWeight - profile.target_weight_kg).toFixed(1)}kg to go
                     </p>
                   </div>
                 );
@@ -897,16 +912,14 @@ export default function DashboardPage() {
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-gradient-to-br from-[#16161f] to-[#111118] border border-white/[0.1] rounded-2xl p-7 w-full max-w-sm mx-4 shadow-2xl shadow-violet-500/10"
+                className="bg-[#141414] border border-white/[0.1] rounded-2xl p-7 w-full max-w-sm mx-4 shadow-2xl"
               >
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold flex items-center gap-2.5 text-lg">
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-                      <Scale className="w-4 h-4 text-violet-400" />
-                    </div>
+                    <Scale className="w-4 h-4 text-white/50" />
                     Log Weight
                   </h3>
-                  <button onClick={() => setShowWeightModal(false)} className="p-2 rounded-xl hover:bg-white/[0.06] text-white/40 hover:text-white transition-all">
+                  <button onClick={() => setShowWeightModal(false)} className="p-2 rounded-lg hover:bg-white/[0.06] text-white/40 hover:text-white transition-all">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -919,7 +932,7 @@ export default function DashboardPage() {
                       value={weightInput}
                       onChange={(e) => setWeightInput(e.target.value)}
                       placeholder={`${currentWeight}`}
-                      className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-5 py-3.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-400/50 focus:bg-white/[0.08] transition-all"
+                      className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-5 py-3.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-orange-400/50 focus:bg-white/[0.08] transition-all"
                       autoFocus
                     />
                   </div>
@@ -928,7 +941,7 @@ export default function DashboardPage() {
                     disabled={logWeightLoading || !weightInput}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white text-sm font-semibold hover:from-violet-400 hover:to-violet-500 transition-all disabled:opacity-40 shadow-lg shadow-violet-500/20"
+                    className="w-full py-3.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-all disabled:opacity-40"
                   >
                     {logWeightLoading ? "Saving..." : "Save Weight"}
                   </m.button>

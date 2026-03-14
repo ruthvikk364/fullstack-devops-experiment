@@ -21,6 +21,9 @@ import {
   Target,
   Calendar,
   X,
+  Sparkles,
+  Medal,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../components/AuthProvider";
@@ -82,41 +85,57 @@ const MILESTONES = [
   {
     days: 7,
     title: "Week Warrior",
+    subtitle: "7 days of dedication",
     icon: Zap,
-    color: "from-blue-500 to-cyan-400",
-    border: "border-blue-500/20",
-    bg: "bg-blue-500/10",
-    text: "text-blue-400",
+    gradient: "from-blue-500 to-cyan-400",
+    glow: "shadow-blue-500/30",
+    border: "border-blue-400/30",
+    bg: "bg-blue-500/15",
+    iconBg: "bg-blue-500/20",
+    text: "text-blue-300",
+    progressBg: "from-blue-500 to-cyan-400",
     reward: null,
   },
   {
     days: 14,
     title: "Fortnight Fighter",
+    subtitle: "14 days strong",
     icon: Star,
-    color: "from-violet-500 to-purple-400",
-    border: "border-violet-500/20",
-    bg: "bg-violet-500/10",
-    text: "text-violet-400",
+    gradient: "from-violet-500 to-purple-400",
+    glow: "shadow-violet-500/30",
+    border: "border-violet-400/30",
+    bg: "bg-violet-500/15",
+    iconBg: "bg-violet-500/20",
+    text: "text-violet-300",
+    progressBg: "from-violet-500 to-purple-400",
     reward: null,
   },
   {
     days: 30,
     title: "Monthly Champion",
+    subtitle: "30 days of glory",
     icon: Trophy,
-    color: "from-orange-500 to-amber-400",
-    border: "border-orange-500/20",
-    bg: "bg-orange-500/10",
-    text: "text-orange-400",
+    gradient: "from-orange-500 to-amber-400",
+    glow: "shadow-orange-500/30",
+    border: "border-orange-400/30",
+    bg: "bg-orange-500/15",
+    iconBg: "bg-orange-500/20",
+    text: "text-orange-300",
+    progressBg: "from-orange-500 to-amber-400",
     reward: "TRAIN10",
   },
   {
     days: 60,
     title: "Two Month Titan",
+    subtitle: "60 days unstoppable",
     icon: Crown,
-    color: "from-emerald-500 to-green-400",
-    border: "border-emerald-500/20",
-    bg: "bg-emerald-500/10",
-    text: "text-emerald-400",
+    gradient: "from-emerald-500 to-green-400",
+    glow: "shadow-emerald-500/30",
+    border: "border-emerald-400/30",
+    bg: "bg-emerald-500/15",
+    iconBg: "bg-emerald-500/20",
+    text: "text-emerald-300",
+    progressBg: "from-emerald-500 to-green-400",
     reward: "TRAIN25",
   },
 ];
@@ -135,18 +154,8 @@ function getDaysInMonth(year: number, month: number) {
 }
 
 const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -166,51 +175,33 @@ export default function DashboardPage() {
   const [logWorkoutLoading, setLogWorkoutLoading] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
 
-  // Tracked days from localStorage (supplement server data)
   const [trackedDays, setTrackedDays] = useState<
     Record<string, { workout?: boolean; weight?: number }>
   >({});
 
-  // Load profile + progress
   const loadData = useCallback(async () => {
     try {
       const stored = localStorage.getItem("trainfree_profile");
-      if (!stored) {
-        setLoading(false);
-        return;
-      }
+      if (!stored) { setLoading(false); return; }
       const profileData: ProfileData = JSON.parse(stored);
       setProfile(profileData);
 
-      // Load local tracked days
       try {
         const local = localStorage.getItem("trainfree_tracked_days");
         if (local) setTrackedDays(JSON.parse(local));
       } catch {}
 
-      // Fetch progress from backend
-      const resp = await fetch(
-        `${API_BASE}/workout/progress/${profileData.user_id}`
-      );
-      if (resp.ok) {
-        const data = await resp.json();
-        setProgress(data);
-      }
+      const resp = await fetch(`${API_BASE}/workout/progress/${profileData.user_id}`);
+      if (resp.ok) setProgress(await resp.json());
     } catch {}
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Save tracked days to localStorage
   useEffect(() => {
     if (Object.keys(trackedDays).length > 0) {
-      localStorage.setItem(
-        "trainfree_tracked_days",
-        JSON.stringify(trackedDays)
-      );
+      localStorage.setItem("trainfree_tracked_days", JSON.stringify(trackedDays));
     }
   }, [trackedDays]);
 
@@ -225,59 +216,38 @@ export default function DashboardPage() {
       const resp = await fetch(`${API_BASE}/workout/weight`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: profile.user_id,
-          weight_kg: weight,
-        }),
+        body: JSON.stringify({ user_id: profile.user_id, weight_kg: weight }),
       });
       if (resp.ok) {
         const todayStr = formatDate(new Date());
-        setTrackedDays((prev) => ({
-          ...prev,
-          [todayStr]: { ...prev[todayStr], weight },
-        }));
+        setTrackedDays((prev) => ({ ...prev, [todayStr]: { ...prev[todayStr], weight } }));
         setWeightInput("");
         setShowWeightModal(false);
-        // Refresh data
         await loadData();
-        // Update localStorage profile with new weight
         const updatedProfile = { ...profile, weight_kg: weight };
         setProfile(updatedProfile);
-        localStorage.setItem(
-          "trainfree_profile",
-          JSON.stringify(updatedProfile)
-        );
+        localStorage.setItem("trainfree_profile", JSON.stringify(updatedProfile));
         window.dispatchEvent(new Event("trainfree_profile_updated"));
       }
     } catch {}
     setLogWeightLoading(false);
   };
 
-  // ─── Log workout (mark today as done) ─────────────────────────
+  // ─── Log workout ──────────────────────────────────────────────
   const handleLogWorkout = async (dateStr?: string) => {
     if (!profile) return;
     const targetDate = dateStr || formatDate(new Date());
-    const dayOfWeek = new Date(targetDate).toLocaleDateString("en-US", {
-      weekday: "long",
-    });
+    const dayOfWeek = new Date(targetDate).toLocaleDateString("en-US", { weekday: "long" });
 
     setLogWorkoutLoading(true);
     try {
       const resp = await fetch(`${API_BASE}/workout/log`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: profile.user_id,
-          day_of_week: dayOfWeek,
-          focus: "General",
-          duration_minutes: 45,
-        }),
+        body: JSON.stringify({ user_id: profile.user_id, day_of_week: dayOfWeek, focus: "General", duration_minutes: 45 }),
       });
       if (resp.ok) {
-        setTrackedDays((prev) => ({
-          ...prev,
-          [targetDate]: { ...prev[targetDate], workout: true },
-        }));
+        setTrackedDays((prev) => ({ ...prev, [targetDate]: { ...prev[targetDate], workout: true } }));
         await loadData();
       }
     } catch {}
@@ -291,66 +261,30 @@ export default function DashboardPage() {
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
 
-    // Weight history dates
     const weightDates: Record<string, number> = {};
     progress?.weight_history.forEach((w) => {
-      if (w.recorded_at) {
-        const d = w.recorded_at.split("T")[0];
-        weightDates[d] = w.weight_kg;
-      }
+      if (w.recorded_at) { const d = w.recorded_at.split("T")[0]; weightDates[d] = w.weight_kg; }
     });
 
     const days: DayData[] = [];
 
-    // Padding days from previous month
     for (let i = 0; i < firstDayOfWeek; i++) {
       const d = new Date(calYear, calMonth, -(firstDayOfWeek - 1 - i));
       const ds = formatDate(d);
-      days.push({
-        date: d,
-        dateStr: ds,
-        isToday: false,
-        isPast: d < today && !isSameDay(d, today),
-        isFuture: false,
-        hasWorkout: trackedDays[ds]?.workout || false,
-        hasWeight: !!weightDates[ds] || !!trackedDays[ds]?.weight,
-        weight: trackedDays[ds]?.weight || weightDates[ds],
-        isCurrentMonth: false,
-      });
+      days.push({ date: d, dateStr: ds, isToday: false, isPast: d < today && !isSameDay(d, today), isFuture: false, hasWorkout: trackedDays[ds]?.workout || false, hasWeight: !!weightDates[ds] || !!trackedDays[ds]?.weight, weight: trackedDays[ds]?.weight || weightDates[ds], isCurrentMonth: false });
     }
 
-    // Current month days
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(calYear, calMonth, day);
       const ds = formatDate(d);
-      days.push({
-        date: d,
-        dateStr: ds,
-        isToday: ds === todayStr,
-        isPast: d < today && ds !== todayStr,
-        isFuture: d > today,
-        hasWorkout: trackedDays[ds]?.workout || false,
-        hasWeight: !!weightDates[ds] || !!trackedDays[ds]?.weight,
-        weight: trackedDays[ds]?.weight || weightDates[ds],
-        isCurrentMonth: true,
-      });
+      days.push({ date: d, dateStr: ds, isToday: ds === todayStr, isPast: d < today && ds !== todayStr, isFuture: d > today, hasWorkout: trackedDays[ds]?.workout || false, hasWeight: !!weightDates[ds] || !!trackedDays[ds]?.weight, weight: trackedDays[ds]?.weight || weightDates[ds], isCurrentMonth: true });
     }
 
-    // Padding days for next month
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(calYear, calMonth + 1, i);
       const ds = formatDate(d);
-      days.push({
-        date: d,
-        dateStr: ds,
-        isToday: false,
-        isPast: false,
-        isFuture: true,
-        hasWorkout: false,
-        hasWeight: false,
-        isCurrentMonth: false,
-      });
+      days.push({ date: d, dateStr: ds, isToday: false, isPast: false, isFuture: true, hasWorkout: false, hasWeight: false, isCurrentMonth: false });
     }
 
     return days;
@@ -365,41 +299,47 @@ export default function DashboardPage() {
     const minW = Math.min(...weights) - 2;
     const maxW = Math.max(...weights) + 2;
     const range = maxW - minW || 1;
-    const w = 600;
-    const h = 160;
-    const padX = 40;
-    const padY = 20;
-    const chartW = w - padX * 2;
-    const chartH = h - padY * 2;
+    const w = 600, h = 180, padX = 44, padY = 24;
+    const chartW = w - padX * 2, chartH = h - padY * 2;
 
-    const points = weights.map((wt, i) => {
-      const x = padX + (i / (weights.length - 1)) * chartW;
-      const y = padY + chartH - ((wt - minW) / range) * chartH;
-      return { x, y, weight: wt };
-    });
+    const points = weights.map((wt, i) => ({
+      x: padX + (i / (weights.length - 1)) * chartW,
+      y: padY + chartH - ((wt - minW) / range) * chartH,
+      weight: wt,
+    }));
 
-    const pathD = points
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-      .join(" ");
+    // Smooth curve using cubic bezier
+    const pathD = points.length <= 2
+      ? points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
+      : points.map((p, i) => {
+          if (i === 0) return `M ${p.x} ${p.y}`;
+          const prev = points[i - 1];
+          const cpx = (prev.x + p.x) / 2;
+          return `C ${cpx} ${prev.y}, ${cpx} ${p.y}, ${p.x} ${p.y}`;
+        }).join(" ");
 
-    // Area fill
     const areaD = `${pathD} L ${points[points.length - 1].x} ${padY + chartH} L ${points[0].x} ${padY + chartH} Z`;
 
-    // Target weight line
-    const targetY =
-      profile?.target_weight_kg
-        ? padY +
-          chartH -
-          ((profile.target_weight_kg - minW) / range) * chartH
-        : null;
+    const targetY = profile?.target_weight_kg
+      ? padY + chartH - ((profile.target_weight_kg - minW) / range) * chartH
+      : null;
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
         <defs>
           <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+            <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.4" />
+            <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
           </linearGradient>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#8b5cf6" />
+            <stop offset="100%" stopColor="#c084fc" />
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map((frac, i) => {
@@ -407,88 +347,36 @@ export default function DashboardPage() {
           const val = (minW + range * frac).toFixed(0);
           return (
             <g key={i}>
-              <line
-                x1={padX}
-                y1={y}
-                x2={w - padX}
-                y2={y}
-                stroke="rgba(255,255,255,0.04)"
-                strokeDasharray="4 4"
-              />
-              <text
-                x={padX - 6}
-                y={y + 4}
-                fill="rgba(255,255,255,0.2)"
-                fontSize="10"
-                textAnchor="end"
-              >
-                {val}
-              </text>
+              <line x1={padX} y1={y} x2={w - padX} y2={y} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+              <text x={padX - 8} y={y + 4} fill="rgba(255,255,255,0.3)" fontSize="10" textAnchor="end" fontFamily="system-ui">{val}</text>
             </g>
           );
         })}
         {/* Target line */}
         {targetY !== null && targetY >= padY && targetY <= padY + chartH && (
           <>
-            <line
-              x1={padX}
-              y1={targetY}
-              x2={w - padX}
-              y2={targetY}
-              stroke="#fb923c"
-              strokeDasharray="6 4"
-              strokeOpacity="0.5"
-            />
-            <text
-              x={w - padX + 4}
-              y={targetY + 3}
-              fill="#fb923c"
-              fontSize="9"
-              opacity="0.7"
-            >
-              Goal
-            </text>
+            <line x1={padX} y1={targetY} x2={w - padX} y2={targetY} stroke="#fb923c" strokeDasharray="6 4" strokeOpacity="0.6" strokeWidth="1.5" />
+            <rect x={w - padX + 4} y={targetY - 8} width="32" height="16" rx="4" fill="rgba(251,146,60,0.15)" />
+            <text x={w - padX + 20} y={targetY + 4} fill="#fb923c" fontSize="9" textAnchor="middle" fontWeight="600">Goal</text>
           </>
         )}
         {/* Area */}
         <path d={areaD} fill="url(#wg)" />
-        {/* Line */}
-        <path
-          d={pathD}
-          fill="none"
-          stroke="#a78bfa"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {/* Line with glow */}
+        <path d={pathD} fill="none" stroke="url(#lineGrad)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" filter="url(#glow)" />
         {/* Points */}
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="4" fill="#a78bfa" />
-            <circle cx={p.x} cy={p.y} r="2" fill="#0a0a0a" />
+            <circle cx={p.x} cy={p.y} r="6" fill="rgba(139,92,246,0.3)" />
+            <circle cx={p.x} cy={p.y} r="4" fill="#8b5cf6" />
+            <circle cx={p.x} cy={p.y} r="2" fill="white" />
           </g>
         ))}
-        {/* First/last labels */}
-        <text
-          x={points[0].x}
-          y={points[0].y - 10}
-          fill="#a78bfa"
-          fontSize="10"
-          textAnchor="middle"
-          fontWeight="600"
-        >
-          {points[0].weight}kg
-        </text>
-        <text
-          x={points[points.length - 1].x}
-          y={points[points.length - 1].y - 10}
-          fill="#a78bfa"
-          fontSize="10"
-          textAnchor="middle"
-          fontWeight="600"
-        >
-          {points[points.length - 1].weight}kg
-        </text>
+        {/* Labels */}
+        <rect x={points[0].x - 18} y={points[0].y - 22} width="36" height="16" rx="4" fill="rgba(139,92,246,0.2)" />
+        <text x={points[0].x} y={points[0].y - 11} fill="#c4b5fd" fontSize="10" textAnchor="middle" fontWeight="700">{points[0].weight}kg</text>
+        <rect x={points[points.length - 1].x - 18} y={points[points.length - 1].y - 22} width="36" height="16" rx="4" fill="rgba(139,92,246,0.2)" />
+        <text x={points[points.length - 1].x} y={points[points.length - 1].y - 11} fill="#c4b5fd" fontSize="10" textAnchor="middle" fontWeight="700">{points[points.length - 1].weight}kg</text>
       </svg>
     );
   };
@@ -496,35 +384,23 @@ export default function DashboardPage() {
   // ─── Loading / no profile states ──────────────────────────────
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <m.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-2 border-violet-400/30 border-t-violet-400 rounded-full"
-        />
+      <div className="min-h-screen bg-[#080810] flex items-center justify-center">
+        <m.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} className="w-10 h-10 border-2 border-violet-400/40 border-t-violet-400 rounded-full" />
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center gap-6 px-6">
-        <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-          <Calendar className="w-7 h-7 text-violet-400" />
+      <div className="min-h-screen bg-[#080810] flex flex-col items-center justify-center gap-6 px-6">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500/20 to-violet-600/10 border border-violet-500/25 flex items-center justify-center">
+          <Calendar className="w-9 h-9 text-violet-400" />
         </div>
         <div className="text-center">
-          <h2 className="text-white text-xl font-bold mb-2">
-            No Profile Yet
-          </h2>
-          <p className="text-white/40 text-sm max-w-sm">
-            Talk to Mika first to complete your fitness profile. Then come back
-            here to track your journey.
-          </p>
+          <h2 className="text-white text-2xl font-bold mb-2">No Profile Yet</h2>
+          <p className="text-white/50 text-sm max-w-sm">Talk to Mika first to complete your fitness profile. Then come back here to track your journey.</p>
         </div>
-        <Link
-          href="/"
-          className="px-6 py-2.5 rounded-full bg-violet-500 text-white text-sm font-medium hover:bg-violet-400 transition-colors"
-        >
+        <Link href="/" className="px-8 py-3 rounded-full bg-gradient-to-r from-violet-500 to-violet-600 text-white text-sm font-semibold hover:from-violet-400 hover:to-violet-500 transition-all shadow-lg shadow-violet-500/25">
           Go to Home
         </Link>
       </div>
@@ -541,56 +417,60 @@ export default function DashboardPage() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <div className="min-h-screen bg-[#080810] text-white">
+        {/* ── Ambient background ── */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-1/2 -left-1/4 w-[800px] h-[800px] rounded-full bg-violet-600/[0.04] blur-[120px]" />
+          <div className="absolute -bottom-1/2 -right-1/4 w-[600px] h-[600px] rounded-full bg-orange-500/[0.03] blur-[100px]" />
+        </div>
+
         {/* ── Top nav ── */}
-        <div className="sticky top-0 z-40 backdrop-blur-xl bg-[#0a0a0a]/80 border-b border-white/5">
+        <div className="sticky top-0 z-40 backdrop-blur-2xl bg-[#080810]/70 border-b border-white/[0.06]">
           <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />
+            <Link href="/" className="flex items-center gap-2.5 text-white/60 hover:text-white transition-colors text-sm group">
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
               <span>Home</span>
             </Link>
-            <div className="flex items-center gap-3">
-              <Dumbbell className="w-4 h-4 text-orange-400" />
-              <span className="font-semibold text-sm">Dashboard</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-orange-500/20 flex items-center justify-center">
+                <Dumbbell className="w-3.5 h-3.5 text-orange-300" />
+              </div>
+              <span className="font-bold text-sm bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">Dashboard</span>
             </div>
             <div className="w-16" />
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-7 relative">
           {/* ── Welcome + Streak hero ── */}
-          <m.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">
+                <h1 className="text-3xl font-bold tracking-tight">
                   Welcome back,{" "}
-                  <span className="bg-gradient-to-r from-violet-400 to-orange-400 bg-clip-text text-transparent">
-                    {profile.name}
-                  </span>
+                  <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-orange-400 bg-clip-text text-transparent">{profile.name}</span>
                 </h1>
-                <p className="text-white/30 text-sm mt-1">
-                  {profile.fitness_goal?.replace("_", " ") || "General fitness"}{" "}
-                  plan &middot; {profile.diet_preference || "—"}
+                <p className="text-white/40 text-sm mt-1.5 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-300 text-[11px] font-medium">
+                    {profile.fitness_goal?.replace("_", " ") || "General fitness"}
+                  </span>
+                  <span className="text-white/20">&middot;</span>
+                  <span className="text-white/40">{profile.diet_preference || "—"}</span>
                 </p>
               </div>
               {streak > 0 && (
                 <m.div
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-orange-500/15 to-orange-600/5 border border-orange-500/20"
+                  className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500/20 via-orange-500/10 to-amber-500/5 border border-orange-400/25 shadow-lg shadow-orange-500/10"
                 >
-                  <Flame className="w-5 h-5 text-orange-400" />
-                  <span className="text-orange-300 font-bold text-lg">
-                    {streak}
-                  </span>
-                  <span className="text-orange-300/60 text-xs">day streak</span>
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-orange-500/30">
+                    <Flame className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <span className="text-orange-200 font-bold text-2xl leading-none">{streak}</span>
+                    <p className="text-orange-300/50 text-[10px] font-medium">day streak</p>
+                  </div>
                 </m.div>
               )}
             </div>
@@ -601,54 +481,51 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1, duration: 0.5 }}
-            className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+            className="grid grid-cols-2 sm:grid-cols-4 gap-4"
           >
-            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Flame className="w-4 h-4 text-orange-400" />
-                <span className="text-[10px] text-white/30 uppercase tracking-wider font-medium">
-                  Streak
-                </span>
+            {/* Streak */}
+            <div className="bg-gradient-to-br from-orange-500/[0.08] to-orange-600/[0.02] border border-orange-400/15 rounded-2xl p-5 group hover:border-orange-400/30 transition-all">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500/30 to-orange-600/15 flex items-center justify-center">
+                  <Flame className="w-4.5 h-4.5 text-orange-400" />
+                </div>
+                <span className="text-[11px] text-orange-300/50 uppercase tracking-wider font-semibold">Streak</span>
               </div>
-              <p className="text-2xl font-bold">{streak}</p>
-              <p className="text-[10px] text-white/20 mt-0.5">days</p>
+              <p className="text-3xl font-bold text-white">{streak}</p>
+              <p className="text-[11px] text-white/30 mt-0.5">days</p>
             </div>
-            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Dumbbell className="w-4 h-4 text-violet-400" />
-                <span className="text-[10px] text-white/30 uppercase tracking-wider font-medium">
-                  Workouts
-                </span>
+            {/* Workouts */}
+            <div className="bg-gradient-to-br from-violet-500/[0.08] to-violet-600/[0.02] border border-violet-400/15 rounded-2xl p-5 group hover:border-violet-400/30 transition-all">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/30 to-violet-600/15 flex items-center justify-center">
+                  <Dumbbell className="w-4.5 h-4.5 text-violet-400" />
+                </div>
+                <span className="text-[11px] text-violet-300/50 uppercase tracking-wider font-semibold">Workouts</span>
               </div>
-              <p className="text-2xl font-bold">{totalWorkouts}</p>
-              <p className="text-[10px] text-white/20 mt-0.5">completed</p>
+              <p className="text-3xl font-bold text-white">{totalWorkouts}</p>
+              <p className="text-[11px] text-white/30 mt-0.5">completed</p>
             </div>
-            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingDown className="w-4 h-4 text-emerald-400" />
-                <span className="text-[10px] text-white/30 uppercase tracking-wider font-medium">
-                  Weight
-                </span>
+            {/* Weight Change */}
+            <div className="bg-gradient-to-br from-emerald-500/[0.08] to-emerald-600/[0.02] border border-emerald-400/15 rounded-2xl p-5 group hover:border-emerald-400/30 transition-all">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/30 to-emerald-600/15 flex items-center justify-center">
+                  {weightChange <= 0 ? <TrendingDown className="w-4.5 h-4.5 text-emerald-400" /> : <TrendingUp className="w-4.5 h-4.5 text-emerald-400" />}
+                </div>
+                <span className="text-[11px] text-emerald-300/50 uppercase tracking-wider font-semibold">Weight</span>
               </div>
-              <p className="text-2xl font-bold">
-                {weightChange > 0 ? "+" : ""}
-                {weightChange.toFixed(1)}
-              </p>
-              <p className="text-[10px] text-white/20 mt-0.5">kg change</p>
+              <p className="text-3xl font-bold text-white">{weightChange > 0 ? "+" : ""}{weightChange.toFixed(1)}</p>
+              <p className="text-[11px] text-white/30 mt-0.5">kg change</p>
             </div>
-            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="w-4 h-4 text-blue-400" />
-                <span className="text-[10px] text-white/30 uppercase tracking-wider font-medium">
-                  BMI
-                </span>
+            {/* BMI */}
+            <div className="bg-gradient-to-br from-blue-500/[0.08] to-blue-600/[0.02] border border-blue-400/15 rounded-2xl p-5 group hover:border-blue-400/30 transition-all">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-600/15 flex items-center justify-center">
+                  <Activity className="w-4.5 h-4.5 text-blue-400" />
+                </div>
+                <span className="text-[11px] text-blue-300/50 uppercase tracking-wider font-semibold">BMI</span>
               </div>
-              <p className="text-2xl font-bold">
-                {profile.bmi?.bmi_value?.toFixed(1) || "—"}
-              </p>
-              <p className="text-[10px] text-white/20 mt-0.5">
-                {profile.bmi?.category || "—"}
-              </p>
+              <p className="text-3xl font-bold text-white">{profile.bmi?.bmi_value?.toFixed(1) || "—"}</p>
+              <p className="text-[11px] text-white/30 mt-0.5">{profile.bmi?.category || "—"}</p>
             </div>
           </m.div>
 
@@ -657,40 +534,26 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="bg-white/[0.02] border border-white/5 rounded-2xl p-6"
+            className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-semibold flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-violet-400" />
+              <h2 className="font-bold flex items-center gap-2.5 text-lg">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-violet-400" />
+                </div>
                 Your Journey
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => {
-                    if (calMonth === 0) {
-                      setCalMonth(11);
-                      setCalYear(calYear - 1);
-                    } else {
-                      setCalMonth(calMonth - 1);
-                    }
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                  onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else { setCalMonth(calMonth - 1); } }}
+                  className="p-2 rounded-xl hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-medium min-w-[140px] text-center">
-                  {MONTH_NAMES[calMonth]} {calYear}
-                </span>
+                <span className="text-sm font-semibold min-w-[140px] text-center text-white/80">{MONTH_NAMES[calMonth]} {calYear}</span>
                 <button
-                  onClick={() => {
-                    if (calMonth === 11) {
-                      setCalMonth(0);
-                      setCalYear(calYear + 1);
-                    } else {
-                      setCalMonth(calMonth + 1);
-                    }
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-colors"
+                  onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else { setCalMonth(calMonth + 1); } }}
+                  className="p-2 rounded-xl hover:bg-white/[0.06] text-white/50 hover:text-white transition-all"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -698,56 +561,48 @@ export default function DashboardPage() {
             </div>
 
             {/* Day labels */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-1.5 mb-2">
               {DAY_LABELS.map((d) => (
-                <div
-                  key={d}
-                  className="text-center text-[10px] text-white/20 font-medium py-1"
-                >
-                  {d}
-                </div>
+                <div key={d} className="text-center text-[11px] text-white/30 font-semibold py-1.5">{d}</div>
               ))}
             </div>
 
             {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
               {calDays.map((day, i) => {
-                const isSelected =
-                  selectedDay?.dateStr === day.dateStr;
+                const isSelected = selectedDay?.dateStr === day.dateStr;
                 return (
                   <m.button
                     key={i}
-                    whileHover={{ scale: 1.08 }}
+                    whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() =>
-                      setSelectedDay(
-                        isSelected ? null : day
-                      )
-                    }
-                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center text-xs transition-all ${
+                    onClick={() => setSelectedDay(isSelected ? null : day)}
+                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center text-xs font-medium transition-all ${
                       !day.isCurrentMonth
-                        ? "opacity-20"
+                        ? "opacity-15 text-white/30"
                         : day.isToday
-                        ? "bg-violet-500/20 border border-violet-500/30 text-violet-300 font-bold"
-                        : day.hasWorkout
-                        ? "bg-emerald-500/15 border border-emerald-500/20 text-emerald-300"
-                        : day.isPast && !day.hasWorkout
-                        ? "bg-white/[0.02] text-white/30"
-                        : day.isFuture
-                        ? "bg-white/[0.01] text-white/15"
-                        : "bg-white/[0.03] text-white/50"
-                    } ${
-                      isSelected
-                        ? "ring-2 ring-violet-400/50 ring-offset-1 ring-offset-[#0a0a0a]"
-                        : ""
-                    }`}
+                          ? "bg-gradient-to-br from-violet-500/30 to-violet-600/15 border border-violet-400/40 text-violet-200 font-bold shadow-md shadow-violet-500/10"
+                          : day.hasWorkout
+                            ? "bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-400/30 text-emerald-200"
+                            : day.hasWeight
+                              ? "bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-400/20 text-blue-200"
+                              : day.isPast
+                                ? "bg-white/[0.03] text-white/40 hover:bg-white/[0.06]"
+                                : day.isFuture
+                                  ? "bg-white/[0.015] text-white/20"
+                                  : "bg-white/[0.04] text-white/60 hover:bg-white/[0.07]"
+                    } ${isSelected ? "ring-2 ring-violet-400/60 ring-offset-2 ring-offset-[#080810]" : ""}`}
                   >
                     <span>{day.date.getDate()}</span>
                     {day.hasWorkout && (
-                      <Check className="w-2.5 h-2.5 text-emerald-400 absolute bottom-1" />
+                      <div className="absolute bottom-1">
+                        <Check className="w-2.5 h-2.5 text-emerald-400" />
+                      </div>
                     )}
                     {day.hasWeight && !day.hasWorkout && (
-                      <Scale className="w-2.5 h-2.5 text-blue-400 absolute bottom-1" />
+                      <div className="absolute bottom-1">
+                        <Scale className="w-2.5 h-2.5 text-blue-400" />
+                      </div>
                     )}
                   </m.button>
                 );
@@ -755,17 +610,17 @@ export default function DashboardPage() {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-5 mt-4 text-[10px] text-white/25">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded bg-emerald-500/30 border border-emerald-500/30" />
+            <div className="flex items-center gap-6 mt-5 text-[11px] text-white/35">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-emerald-500/40 to-emerald-600/20 border border-emerald-400/30" />
                 Workout done
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded bg-violet-500/30 border border-violet-500/30" />
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-violet-500/40 to-violet-600/20 border border-violet-400/30" />
                 Today
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded bg-blue-500/30 border border-blue-500/20" />
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-md bg-gradient-to-br from-blue-500/30 to-blue-600/15 border border-blue-400/25" />
                 Weight logged
               </div>
             </div>
@@ -773,48 +628,30 @@ export default function DashboardPage() {
             {/* Selected day panel */}
             <AnimatePresence>
               {selectedDay && selectedDay.isCurrentMonth && (
-                <m.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="mt-4 pt-4 border-t border-white/5">
+                <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="mt-5 pt-5 border-t border-white/[0.06]">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-medium">
-                        {selectedDay.date.toLocaleDateString("en-US", {
-                          weekday: "long",
-                          month: "short",
-                          day: "numeric",
-                        })}
+                      <p className="text-sm font-semibold text-white/80">
+                        {selectedDay.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                       </p>
                       <div className="flex items-center gap-2">
                         {selectedDay.hasWorkout && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
-                            Workout done
-                          </span>
+                          <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/20 font-medium">Workout done</span>
                         )}
                         {selectedDay.hasWeight && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
-                            {selectedDay.weight?.toFixed(1)} kg
-                          </span>
+                          <span className="text-[11px] px-3 py-1 rounded-full bg-blue-500/15 text-blue-300 border border-blue-400/20 font-medium">{selectedDay.weight?.toFixed(1)} kg</span>
                         )}
                       </div>
                     </div>
-                    {(selectedDay.isToday || selectedDay.isPast) &&
-                      !selectedDay.hasWorkout && (
-                        <button
-                          onClick={() =>
-                            handleLogWorkout(selectedDay.dateStr)
-                          }
-                          disabled={logWorkoutLoading}
-                          className="w-full py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all disabled:opacity-40"
-                        >
-                          {logWorkoutLoading
-                            ? "Logging..."
-                            : "Mark Workout Complete"}
-                        </button>
-                      )}
+                    {(selectedDay.isToday || selectedDay.isPast) && !selectedDay.hasWorkout && (
+                      <button
+                        onClick={() => handleLogWorkout(selectedDay.dateStr)}
+                        disabled={logWorkoutLoading}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500/15 to-emerald-600/10 border border-emerald-400/25 text-emerald-300 text-xs font-semibold hover:from-emerald-500/25 hover:to-emerald-600/15 transition-all disabled:opacity-40"
+                      >
+                        {logWorkoutLoading ? "Logging..." : "Mark Workout Complete"}
+                      </button>
+                    )}
                   </div>
                 </m.div>
               )}
@@ -827,30 +664,23 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
-              className="bg-white/[0.02] border border-white/5 rounded-2xl p-6"
+              className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold flex items-center gap-2">
-                  <Scale className="w-4 h-4 text-violet-400" />
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-bold flex items-center gap-2.5 text-lg">
+                  <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
+                    <Scale className="w-4 h-4 text-violet-400" />
+                  </div>
                   Weight Progress
                 </h2>
-                <div className="flex items-center gap-3 text-xs text-white/30">
-                  <span>
-                    Start: <strong className="text-white/60">{startWeight}kg</strong>
-                  </span>
-                  <span>&rarr;</span>
-                  <span>
-                    Now: <strong className="text-violet-400">{currentWeight}kg</strong>
-                  </span>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5 text-white/40">Start: <strong className="text-white/70">{startWeight}kg</strong></span>
+                  <span className="text-white/15">&rarr;</span>
+                  <span className="flex items-center gap-1.5 text-white/40">Now: <strong className="text-violet-400">{currentWeight}kg</strong></span>
                   {profile.target_weight_kg && (
                     <>
-                      <span>&rarr;</span>
-                      <span>
-                        Goal:{" "}
-                        <strong className="text-orange-400">
-                          {profile.target_weight_kg}kg
-                        </strong>
-                      </span>
+                      <span className="text-white/15">&rarr;</span>
+                      <span className="flex items-center gap-1.5 text-white/40">Goal: <strong className="text-orange-400">{profile.target_weight_kg}kg</strong></span>
                     </>
                   )}
                 </div>
@@ -864,28 +694,30 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.5 }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
           >
-            <button
+            <m.button
               onClick={() => setShowWeightModal(true)}
-              className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 flex items-center gap-4 text-left hover:bg-white/[0.05] hover:border-violet-500/20 transition-all group"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-gradient-to-br from-violet-500/[0.08] to-violet-600/[0.02] border border-violet-400/20 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-violet-400/35 transition-all group cursor-pointer"
             >
-              <div className="w-11 h-11 rounded-xl bg-violet-500/10 flex items-center justify-center group-hover:bg-violet-500/20 transition-colors">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/30 to-violet-600/15 flex items-center justify-center group-hover:from-violet-500/40 transition-colors shadow-lg shadow-violet-500/10">
                 <Scale className="w-5 h-5 text-violet-400" />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">Log Weight</p>
-                <p className="text-[11px] text-white/25 mt-0.5">
-                  Track your daily weight
-                </p>
+                <p className="text-sm font-semibold text-white">Log Weight</p>
+                <p className="text-[11px] text-white/35 mt-0.5">Track your daily weight</p>
               </div>
-            </button>
-            <button
+            </m.button>
+            <m.button
               onClick={() => handleLogWorkout()}
               disabled={logWorkoutLoading || trackedDays[formatDate(new Date())]?.workout}
-              className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 flex items-center gap-4 text-left hover:bg-white/[0.05] hover:border-emerald-500/20 transition-all group disabled:opacity-40"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-gradient-to-br from-emerald-500/[0.08] to-emerald-600/[0.02] border border-emerald-400/20 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-emerald-400/35 transition-all group disabled:opacity-40 cursor-pointer"
             >
-              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/30 to-emerald-600/15 flex items-center justify-center group-hover:from-emerald-500/40 transition-colors shadow-lg shadow-emerald-500/10">
                 {trackedDays[formatDate(new Date())]?.workout ? (
                   <Check className="w-5 h-5 text-emerald-400" />
                 ) : (
@@ -893,18 +725,14 @@ export default function DashboardPage() {
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-white">
-                  {trackedDays[formatDate(new Date())]?.workout
-                    ? "Workout Logged Today"
-                    : "Log Today's Workout"}
+                <p className="text-sm font-semibold text-white">
+                  {trackedDays[formatDate(new Date())]?.workout ? "Workout Logged Today" : "Log Today's Workout"}
                 </p>
-                <p className="text-[11px] text-white/25 mt-0.5">
-                  {trackedDays[formatDate(new Date())]?.workout
-                    ? "Great job! Keep it up"
-                    : "Mark today as done"}
+                <p className="text-[11px] text-white/35 mt-0.5">
+                  {trackedDays[formatDate(new Date())]?.workout ? "Great job! Keep it up" : "Mark today as done"}
                 </p>
               </div>
-            </button>
+            </m.button>
           </m.div>
 
           {/* ── Rewards & Milestones ── */}
@@ -912,80 +740,95 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.5 }}
-            className="bg-white/[0.02] border border-white/5 rounded-2xl p-6"
+            className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
           >
-            <h2 className="font-semibold flex items-center gap-2 mb-5">
-              <Trophy className="w-4 h-4 text-orange-400" />
+            <h2 className="font-bold flex items-center gap-2.5 text-lg mb-6">
+              <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                <Trophy className="w-4 h-4 text-orange-400" />
+              </div>
               Rewards & Milestones
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {MILESTONES.map((m) => {
-                const unlocked = streak >= m.days;
-                const Icon = m.icon;
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {MILESTONES.map((ms) => {
+                const unlocked = streak >= ms.days;
+                const Icon = ms.icon;
+                const pct = Math.min(100, (streak / ms.days) * 100);
                 return (
-                  <div
-                    key={m.days}
-                    className={`relative rounded-2xl p-4 text-center transition-all ${
+                  <m.div
+                    key={ms.days}
+                    whileHover={{ scale: 1.03, y: -3 }}
+                    className={`relative rounded-2xl p-5 text-center transition-all overflow-hidden ${
                       unlocked
-                        ? `${m.bg} border ${m.border}`
-                        : "bg-white/[0.02] border border-white/5 opacity-50"
+                        ? `${ms.bg} border ${ms.border} shadow-lg ${ms.glow}`
+                        : `bg-gradient-to-br from-white/[0.04] to-white/[0.015] border border-white/[0.08] hover:border-white/[0.12]`
                     }`}
                   >
-                    <div
-                      className={`w-10 h-10 mx-auto rounded-xl flex items-center justify-center mb-2 ${
-                        unlocked
-                          ? `bg-gradient-to-br ${m.color} shadow-lg`
-                          : "bg-white/5"
-                      }`}
-                    >
-                      {unlocked ? (
-                        <Icon className="w-5 h-5 text-white" />
-                      ) : (
-                        <Lock className="w-4 h-4 text-white/20" />
+                    {/* Unlocked glow effect */}
+                    {unlocked && (
+                      <div className={`absolute inset-0 bg-gradient-to-br ${ms.gradient} opacity-[0.06] pointer-events-none`} />
+                    )}
+
+                    {/* Icon */}
+                    <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3 relative ${
+                      unlocked
+                        ? `bg-gradient-to-br ${ms.gradient} shadow-xl ${ms.glow}`
+                        : ms.iconBg
+                    }`}>
+                      <Icon className={`w-6 h-6 ${unlocked ? "text-white" : ms.text} ${!unlocked ? "opacity-60" : ""}`} />
+                      {!unlocked && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#12121a] border border-white/10 flex items-center justify-center">
+                          <Lock className="w-2.5 h-2.5 text-white/40" />
+                        </div>
                       )}
                     </div>
-                    <p
-                      className={`text-xs font-semibold ${
-                        unlocked ? m.text : "text-white/30"
-                      }`}
-                    >
-                      {m.title}
+
+                    {/* Title */}
+                    <p className={`text-xs font-bold ${unlocked ? ms.text : "text-white/60"}`}>
+                      {ms.title}
                     </p>
-                    <p className="text-[10px] text-white/20 mt-0.5">
-                      {m.days} day streak
+                    <p className={`text-[10px] mt-0.5 ${unlocked ? "text-white/30" : "text-white/25"}`}>
+                      {ms.subtitle}
                     </p>
-                    {unlocked && m.reward && (
-                      <div className="mt-2 px-2 py-1 rounded-lg bg-black/30 border border-white/5">
-                        <div className="flex items-center justify-center gap-1">
-                          <Gift className="w-3 h-3 text-orange-400" />
-                          <span className="text-[10px] font-mono font-bold text-orange-300">
-                            {m.reward}
-                          </span>
+
+                    {/* Coupon for unlocked */}
+                    {unlocked && ms.reward && (
+                      <m.div
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-3 px-3 py-2 rounded-xl bg-gradient-to-r from-black/40 to-black/20 border border-white/[0.08]"
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Gift className="w-3.5 h-3.5 text-orange-400" />
+                          <span className="text-[11px] font-mono font-bold text-orange-300 tracking-wider">{ms.reward}</span>
                         </div>
-                        <p className="text-[8px] text-white/20 mt-0.5">
-                          Coupon code
-                        </p>
-                      </div>
+                        <p className="text-[9px] text-white/25 mt-1">Coupon code</p>
+                      </m.div>
                     )}
+
+                    {/* Progress for locked */}
                     {!unlocked && (
-                      <div className="mt-2">
-                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${m.color}`}
-                            style={{
-                              width: `${Math.min(
-                                100,
-                                (streak / m.days) * 100
-                              )}%`,
-                            }}
+                      <div className="mt-3">
+                        <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                          <m.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 1, delay: 0.5 }}
+                            className={`h-full rounded-full bg-gradient-to-r ${ms.progressBg}`}
                           />
                         </div>
-                        <p className="text-[9px] text-white/15 mt-1">
-                          {m.days - streak} days to go
+                        <p className={`text-[10px] mt-1.5 font-medium ${ms.text} opacity-60`}>
+                          {ms.days - streak} days to go
                         </p>
                       </div>
                     )}
-                  </div>
+
+                    {/* Unlocked sparkle */}
+                    {unlocked && (
+                      <div className="absolute top-2 right-2">
+                        <Sparkles className={`w-4 h-4 ${ms.text} opacity-50`} />
+                      </div>
+                    )}
+                  </m.div>
                 );
               })}
             </div>
@@ -997,48 +840,37 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45, duration: 0.5 }}
-              className="bg-gradient-to-br from-violet-500/5 to-orange-500/5 border border-white/5 rounded-2xl p-6"
+              className="bg-gradient-to-br from-violet-500/[0.06] via-purple-500/[0.03] to-orange-500/[0.06] border border-white/[0.08] rounded-2xl p-6 backdrop-blur-sm"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="w-4 h-4 text-orange-400" />
-                <h2 className="font-semibold">Goal Progress</h2>
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-orange-400" />
+                </div>
+                <h2 className="font-bold text-lg">Goal Progress</h2>
               </div>
               {(() => {
-                const totalToLose = Math.abs(
-                  startWeight - profile.target_weight_kg
-                );
+                const totalToLose = Math.abs(startWeight - profile.target_weight_kg);
                 const lost = Math.abs(startWeight - currentWeight);
-                const pct =
-                  totalToLose > 0
-                    ? Math.min(100, (lost / totalToLose) * 100)
-                    : 0;
+                const pct = totalToLose > 0 ? Math.min(100, (lost / totalToLose) * 100) : 0;
                 return (
                   <div>
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-white/40">
-                        {startWeight}kg
-                      </span>
-                      <span className="text-violet-400 font-bold">
-                        {currentWeight}kg
-                      </span>
-                      <span className="text-orange-400 font-medium">
-                        {profile.target_weight_kg}kg
-                      </span>
+                    <div className="flex items-center justify-between text-sm mb-3">
+                      <span className="text-white/50 font-medium">{startWeight}kg</span>
+                      <span className="text-violet-300 font-bold text-lg">{currentWeight}kg</span>
+                      <span className="text-orange-400 font-semibold">{profile.target_weight_kg}kg</span>
                     </div>
-                    <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-4 bg-white/[0.06] rounded-full overflow-hidden relative">
                       <m.div
                         initial={{ width: 0 }}
                         animate={{ width: `${pct}%` }}
-                        transition={{ duration: 1, delay: 0.5 }}
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-orange-500"
-                      />
+                        transition={{ duration: 1.2, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-orange-500 relative"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+                      </m.div>
                     </div>
-                    <p className="text-xs text-white/20 mt-2 text-center">
-                      {pct.toFixed(0)}% of the way there!{" "}
-                      {Math.abs(
-                        currentWeight - profile.target_weight_kg
-                      ).toFixed(1)}
-                      kg to go
+                    <p className="text-xs text-white/35 mt-3 text-center font-medium">
+                      <span className="text-violet-400">{pct.toFixed(0)}%</span> of the way there &middot; {Math.abs(currentWeight - profile.target_weight_kg).toFixed(1)}kg to go
                     </p>
                   </div>
                 );
@@ -1056,50 +888,50 @@ export default function DashboardPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
               onClick={() => setShowWeightModal(false)}
             >
               <m.div
                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-[#141414] border border-white/8 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl"
+                className="bg-gradient-to-br from-[#16161f] to-[#111118] border border-white/[0.1] rounded-2xl p-7 w-full max-w-sm mx-4 shadow-2xl shadow-violet-500/10"
               >
-                <div className="flex items-center justify-between mb-5">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-violet-400" />
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold flex items-center gap-2.5 text-lg">
+                    <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
+                      <Scale className="w-4 h-4 text-violet-400" />
+                    </div>
                     Log Weight
                   </h3>
-                  <button
-                    onClick={() => setShowWeightModal(false)}
-                    className="p-1 rounded-lg hover:bg-white/5 text-white/30"
-                  >
+                  <button onClick={() => setShowWeightModal(false)} className="p-2 rounded-xl hover:bg-white/[0.06] text-white/40 hover:text-white transition-all">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="text-xs text-white/30 block mb-1.5">
-                      Current weight (kg)
-                    </label>
+                    <label className="text-xs text-white/40 block mb-2 font-medium">Current weight (kg)</label>
                     <input
                       type="number"
                       step="0.1"
                       value={weightInput}
                       onChange={(e) => setWeightInput(e.target.value)}
                       placeholder={`${currentWeight}`}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-violet-500/40 transition-colors"
+                      className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-5 py-3.5 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-violet-400/50 focus:bg-white/[0.08] transition-all"
                       autoFocus
                     />
                   </div>
-                  <button
+                  <m.button
                     onClick={handleLogWeight}
                     disabled={logWeightLoading || !weightInput}
-                    className="w-full py-3 rounded-xl bg-violet-500 text-white text-sm font-medium hover:bg-violet-400 transition-colors disabled:opacity-40"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 text-white text-sm font-semibold hover:from-violet-400 hover:to-violet-500 transition-all disabled:opacity-40 shadow-lg shadow-violet-500/20"
                   >
                     {logWeightLoading ? "Saving..." : "Save Weight"}
-                  </button>
+                  </m.button>
                 </div>
               </m.div>
             </m.div>

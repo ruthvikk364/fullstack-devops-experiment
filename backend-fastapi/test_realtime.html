@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrainFree — Coach Bheema (Voice + Vision)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e4e4e7; min-height: 100vh; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { color: #10b981; font-size: 22px; }
+  .subtitle { color: #71717a; font-size: 13px; margin-bottom: 16px; }
+
+  /* Setup panel */
+  .setup { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  label { font-size: 13px; color: #a1a1aa; }
+  input, select { padding: 8px 12px; border-radius: 6px; border: 1px solid #27272a; background: #0a0a0a; color: #e4e4e7; font-size: 13px; }
+  input:focus, select:focus { outline: none; border-color: #10b981; }
+  input[type=text] { width: 280px; }
+  input[type=number] { width: 70px; }
+
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-green { background: #10b981; color: #000; }
+  .btn-green:hover:not(:disabled) { background: #059669; }
+  .btn-red { background: #ef4444; color: #fff; }
+  .btn-red:hover:not(:disabled) { background: #dc2626; }
+  .btn-yellow { background: #eab308; color: #000; }
+  .btn-yellow:hover:not(:disabled) { background: #ca8a04; }
+  .btn-blue { background: #3b82f6; color: #fff; }
+  .btn-blue:hover:not(:disabled) { background: #2563eb; }
+
+  /* Main layout */
+  .main { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+  @media (max-width: 800px) { .main { grid-template-columns: 1fr; } }
+
+  /* Video + voice area */
+  .media-area { display: flex; flex-direction: column; gap: 12px; }
+  .video-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #18181b; aspect-ratio: 4/3; }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .video-overlay { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; justify-content: space-between; }
+  .badge { background: rgba(0,0,0,0.75); padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+
+  /* Voice controls */
+  .voice-panel { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; }
+  .voice-status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .pulse { width: 12px; height: 12px; border-radius: 50%; background: #27272a; }
+  .pulse.active { background: #10b981; animation: pulse 1.5s infinite; }
+  .pulse.speaking { background: #3b82f6; animation: pulse 0.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Transcript */
+  .transcript { background: #111; border: 1px solid #27272a; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto; margin-top: 12px; font-size: 13px; line-height: 1.6; }
+  .t-agent { color: #10b981; }
+  .t-user { color: #3b82f6; }
+  .t-system { color: #71717a; font-style: italic; }
+
+  /* Right panel — stats */
+  .side-panel { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 14px; }
+  .card-label { font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 1px; }
+  .card-value { font-size: 32px; font-weight: 700; color: #10b981; margin-top: 2px; }
+  .card-sub { font-size: 12px; color: #a1a1aa; }
+
+  .phase-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .phase-up { background: #10b981; }
+  .phase-down { background: #ef4444; }
+  .phase-going_down { background: #eab308; }
+  .phase-going_up { background: #3b82f6; }
+
+  /* Music player */
+  .music-bar { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px; display: none; align-items: center; gap: 10px; margin-top: 8px; }
+  .music-bar.active { display: flex; }
+  .music-info { flex: 1; font-size: 13px; }
+  .music-title { color: #e4e4e7; }
+  .music-artist { color: #71717a; font-size: 12px; }
+
+  /* Feedback */
+  .feedback-box { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 14px; min-height: 50px; }
+  .feedback-text { font-size: 15px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Coach Bheema — Real-Time Voice Trainer</h1>
+  <p class="subtitle">Voice coaching + camera rep counting — powered by OpenAI Realtime + MediaPipe</p>
+
+  <!-- Setup -->
+  <div class="setup">
+    <div class="setup-row">
+      <label>User ID: <input type="text" id="userId" placeholder="paste your user_id from onboarding"></label>
+      <label>Exercise:
+        <select id="exercise">
+          <option value="squat">Squats</option>
+          <option value="pushup">Push-ups</option>
+          <option value="bicep_curl">Bicep Curls</option>
+          <option value="deadlift">Deadlifts</option>
+          <option value="shoulder_press">Shoulder Press</option>
+        </select>
+      </label>
+      <label>Reps: <input type="number" id="targetReps" value="10" min="1"></label>
+      <label>Sets: <input type="number" id="targetSets" value="3" min="1"></label>
+    </div>
+    <div class="setup-row">
+      <button class="btn btn-green" id="startBtn" onclick="startWorkout()">Start Workout</button>
+      <button class="btn btn-yellow" id="pauseBtn" onclick="togglePause()" disabled>Pause</button>
+      <button class="btn btn-red" id="stopBtn" onclick="stopWorkout()" disabled>Stop</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="media-area">
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="video-overlay">
+          <span class="badge" id="phaseBadge">READY</span>
+          <span class="badge" id="fpsBadge">— fps</span>
+        </div>
+      </div>
+
+      <div class="voice-panel">
+        <div class="voice-status">
+          <span class="pulse" id="voicePulse"></span>
+          <span id="voiceStatus">Not connected</span>
+        </div>
+        <div class="controls">
+          <button class="btn btn-blue" id="musicBtn" onclick="requestMusic()" disabled>Ask for Music</button>
+          <button class="btn btn-red" id="stopMusicBtn" onclick="stopMusicLocal()" style="display:none">Stop Music</button>
+        </div>
+        <div class="music-bar" id="musicBar">
+          <div class="music-info">
+            <div class="music-title" id="musicTitle">—</div>
+            <div class="music-artist" id="musicArtist">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transcript" id="transcript"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="side-panel">
+      <div class="card">
+        <div class="card-label">Reps</div>
+        <div class="card-value" id="repCount">0</div>
+        <div class="card-sub" id="repTarget">/ 10</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Set</div>
+        <div class="card-value" id="setCount">1</div>
+        <div class="card-sub" id="setTarget">/ 3</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Phase</div>
+        <div><span class="phase-dot phase-up" id="phaseDot"></span><span id="phaseText">Standing</span></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Angle</div>
+        <div class="card-value" id="angleVal" style="font-size:24px">—</div>
+      </div>
+      <div class="feedback-box">
+        <div class="card-label">Coach Says</div>
+        <div class="feedback-text" id="feedbackText">Press Start to begin your workout with Coach Bheema.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="captureCanvas" style="display:none"></canvas>
+<audio id="musicAudio" style="display:none"></audio>
+
+<script>
+// Change this to match your server
+const BASE_WS = 'ws://localhost:8080/api';
+const VISION_FPS = 12;
+
+let visionWs = null, realtimeWs = null;
+let stream = null, captureInterval = null;
+let sessionId = null;
+let audioCtx = null, micProcessor = null, micStream = null;
+let paused = false;
+let agentTranscript = '';
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('captureCanvas');
+const ctx = canvas.getContext('2d');
+
+// ─── Helpers ───
+function addTranscript(text, cls) {
+  const el = document.getElementById('transcript');
+  const span = document.createElement('div');
+  span.className = cls;
+  span.textContent = text;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Start Workout ───
+async function startWorkout() {
+  sessionId = crypto.randomUUID();
+  const userId = document.getElementById('userId').value.trim();
+  const exercise = document.getElementById('exercise').value;
+  const targetReps = parseInt(document.getElementById('targetReps').value);
+  const targetSets = parseInt(document.getElementById('targetSets').value);
+
+  document.getElementById('repTarget').textContent = `/ ${targetReps}`;
+  document.getElementById('setTarget').textContent = `/ ${targetSets}`;
+
+  // Camera
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+    video.srcObject = stream;
+    await video.play();
+    canvas.width = 640; canvas.height = 480;
+  } catch(e) { alert('Camera access needed: ' + e.message); return; }
+
+  // Mic
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true } });
+  } catch(e) { alert('Microphone access needed: ' + e.message); return; }
+
+  // 1. Start vision WebSocket
+  startVision(sessionId, exercise, targetReps, targetSets);
+
+  // 2. Start realtime voice WebSocket
+  startRealtime(sessionId, userId);
+
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('pauseBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('musicBtn').disabled = false;
+}
+
+// ─── Vision WebSocket (camera → rep counting) ───
+function startVision(sid, exercise, reps, sets) {
+  visionWs = new WebSocket(`${BASE_WS}/vision/ws/${sid}`);
+  visionWs.onopen = () => {
+    visionWs.send(JSON.stringify({ type: 'start', exercise, target_reps: reps, target_sets: sets, rest_seconds: 60 }));
+    captureInterval = setInterval(captureFrame, 1000 / VISION_FPS);
+    addTranscript('[Vision connected — camera tracking active]', 't-system');
+  };
+  visionWs.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'rep_update') {
+      document.getElementById('repCount').textContent = data.reps;
+      document.getElementById('setCount').textContent = data.current_set;
+      document.getElementById('angleVal').textContent = data.current_angle + '°';
+      const phaseMap = { up:'Standing', going_down:'Going Down', down:'Bottom', going_up:'Coming Up' };
+      document.getElementById('phaseText').textContent = phaseMap[data.phase] || data.phase;
+      document.getElementById('phaseDot').className = 'phase-dot phase-' + data.phase;
+      document.getElementById('phaseBadge').textContent = (phaseMap[data.phase]||data.phase).toUpperCase();
+      if (data.form_feedback) document.getElementById('feedbackText').textContent = data.form_feedback;
+    } else if (data.type === 'no_pose') {
+      document.getElementById('feedbackText').textContent = data.message;
+    }
+  };
+  visionWs.onclose = () => addTranscript('[Vision disconnected]', 't-system');
+}
+
+function captureFrame() {
+  if (!visionWs || visionWs.readyState !== 1) return;
+  ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  visionWs.send(JSON.stringify({ type: 'frame', data: dataUrl }));
+}
+
+// ─── Realtime Voice WebSocket ───
+function startRealtime(sid, userId) {
+  realtimeWs = new WebSocket(`${BASE_WS}/realtime/ws/${sid}`);
+
+  realtimeWs.onopen = () => {
+    document.getElementById('voiceStatus').textContent = 'Connecting...';
+    document.getElementById('voicePulse').classList.add('active');
+    realtimeWs.send(JSON.stringify({ type: 'config', user_id: userId, vision_session_id: sid }));
+  };
+
+  realtimeWs.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === 'audio') {
+      playAudioChunk(data.data);
+    } else if (data.type === 'transcript') {
+      agentTranscript += data.text;
+      // Flush on sentence-ending punctuation
+      if (/[.!?]\s*$/.test(agentTranscript)) {
+        addTranscript('Bheema: ' + agentTranscript.trim(), 't-agent');
+        document.getElementById('feedbackText').textContent = agentTranscript.trim();
+        agentTranscript = '';
+      }
+    } else if (data.type === 'user_transcript') {
+      addTranscript('You: ' + data.text, 't-user');
+    } else if (data.type === 'status') {
+      document.getElementById('voiceStatus').textContent = data.message;
+      if (data.message === 'listening') {
+        document.getElementById('voicePulse').className = 'pulse speaking';
+      }
+      addTranscript('[' + data.message + ']', 't-system');
+    } else if (data.type === 'play_music') {
+      playMusic(data.tracks);
+    } else if (data.type === 'stop_music') {
+      stopMusicLocal();
+    } else if (data.type === 'rest_timer') {
+      startRestTimer(data.seconds, data.message);
+    } else if (data.type === 'error') {
+      addTranscript('[Error: ' + data.message + ']', 't-system');
+    } else if (data.type === 'rep_sync') {
+      document.getElementById('repCount').textContent = data.reps;
+    }
+  };
+
+  realtimeWs.onclose = () => {
+    document.getElementById('voiceStatus').textContent = 'Disconnected';
+    document.getElementById('voicePulse').classList.remove('active', 'speaking');
+    addTranscript('[Voice disconnected]', 't-system');
+    stopMicCapture();
+  };
+
+  realtimeWs.onerror = () => {
+    addTranscript('[Voice connection error]', 't-system');
+  };
+
+  // Start mic capture after a short delay for connection
+  setTimeout(startMicCapture, 2000);
+}
+
+// ─── Mic capture → PCM16 24kHz ───
+function startMicCapture() {
+  if (!micStream) return;
+  audioCtx = new AudioContext({ sampleRate: 24000 });
+  const source = audioCtx.createMediaStreamSource(micStream);
+
+  // ScriptProcessor for simplicity (AudioWorklet is better but more complex)
+  micProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+  micProcessor.onaudioprocess = (e) => {
+    if (paused || !realtimeWs || realtimeWs.readyState !== 1) return;
+    const float32 = e.inputBuffer.getChannelData(0);
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      const s = Math.max(-1, Math.min(1, float32[i]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)));
+    realtimeWs.send(JSON.stringify({ type: 'audio', data: b64 }));
+  };
+  source.connect(micProcessor);
+  micProcessor.connect(audioCtx.destination);
+  document.getElementById('voiceStatus').textContent = 'Listening...';
+  addTranscript('[Microphone active]', 't-system');
+}
+
+function stopMicCapture() {
+  if (micProcessor) { micProcessor.disconnect(); micProcessor = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+}
+
+// ─── Play agent audio (PCM16 24kHz → speakers) ───
+const audioQueue = [];
+let isPlaying = false;
+
+function playAudioChunk(b64) {
+  audioQueue.push(b64);
+  if (!isPlaying) drainAudioQueue();
+}
+
+async function drainAudioQueue() {
+  if (!audioQueue.length) { isPlaying = false; return; }
+  isPlaying = true;
+  const ctx2 = new AudioContext({ sampleRate: 24000 });
+
+  while (audioQueue.length) {
+    const b64 = audioQueue.shift();
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 0x8000;
+
+    const buffer = ctx2.createBuffer(1, float32.length, 24000);
+    buffer.getChannelData(0).set(float32);
+    const source = ctx2.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx2.destination);
+    source.start();
+    await new Promise(r => source.onended = r);
+  }
+  await ctx2.close();
+  isPlaying = false;
+}
+
+// ─── Music ───
+function playMusic(tracks) {
+  if (!tracks || !tracks.length) return;
+  const track = tracks[0];
+  const audio = document.getElementById('musicAudio');
+  if (track.preview_url) {
+    audio.src = track.preview_url;
+    audio.play();
+  }
+  document.getElementById('musicTitle').textContent = track.title;
+  document.getElementById('musicArtist').textContent = track.artist;
+  document.getElementById('musicBar').classList.add('active');
+  document.getElementById('stopMusicBtn').style.display = 'inline-block';
+  addTranscript(`[Playing: ${track.title} — ${track.artist}]`, 't-system');
+}
+
+function stopMusicLocal() {
+  document.getElementById('musicAudio').pause();
+  document.getElementById('musicBar').classList.remove('active');
+  document.getElementById('stopMusicBtn').style.display = 'none';
+}
+
+function requestMusic() {
+  if (realtimeWs && realtimeWs.readyState === 1) {
+    // Send a text message to trigger the agent to play music
+    // This goes as user speech
+    addTranscript('You: Play some workout music', 't-user');
+  }
+}
+
+// ─── Rest timer ───
+function startRestTimer(seconds, message) {
+  let rem = seconds;
+  document.getElementById('phaseBadge').textContent = 'RESTING';
+  addTranscript(`[Rest: ${seconds}s — ${message}]`, 't-system');
+  const timer = setInterval(() => {
+    rem--;
+    document.getElementById('feedbackText').textContent = `Rest... ${rem}s remaining`;
+    if (rem <= 0) {
+      clearInterval(timer);
+      document.getElementById('feedbackText').textContent = 'Rest over — let\'s go!';
+      document.getElementById('phaseBadge').textContent = 'READY';
+      if (visionWs && visionWs.readyState === 1) {
+        visionWs.send(JSON.stringify({ type: 'reset_set' }));
+      }
+    }
+  }, 1000);
+}
+
+// ─── Pause / Resume ───
+function togglePause() {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  if (paused) {
+    btn.textContent = 'Resume';
+    btn.className = 'btn btn-blue';
+    if (realtimeWs && realtimeWs.readyState === 1) realtimeWs.send(JSON.stringify({ type: 'pause' }));
+    addTranscript('[Paused]', 't-system');
+  } else {
+    btn.textContent = 'Pause';
+    btn.className = 'btn btn-yellow';
+    if (realtimeWs && realtimeWs.readyState === 1) realtimeWs.send(JSON.stringify({ type: 'resume' }));
+    addTranscript('[Resumed]', 't-system');
+  }
+}
+
+// ─── Stop ───
+function stopWorkout() {
+  if (visionWs && visionWs.readyState === 1) { visionWs.send(JSON.stringify({ type: 'stop' })); visionWs.close(); }
+  if (realtimeWs && realtimeWs.readyState === 1) { realtimeWs.send(JSON.stringify({ type: 'stop' })); realtimeWs.close(); }
+  if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  stopMicCapture();
+  stopMusicLocal();
+
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('pauseBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('musicBtn').disabled = true;
+  document.getElementById('voiceStatus').textContent = 'Stopped';
+  document.getElementById('voicePulse').classList.remove('active', 'speaking');
+  addTranscript('[Workout ended]', 't-system');
+}
+</script>
+</body>
+</html>

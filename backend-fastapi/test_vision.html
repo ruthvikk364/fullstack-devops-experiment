@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrainFree — Vision Rep Counter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e4e4e7; min-height: 100vh; }
+  .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+  h1 { color: #10b981; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { color: #71717a; margin-bottom: 20px; }
+
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
+  select, input, button { padding: 10px 16px; border-radius: 8px; border: 1px solid #27272a; background: #18181b; color: #e4e4e7; font-size: 14px; }
+  select:focus, input:focus { outline: none; border-color: #10b981; }
+  input[type=number] { width: 80px; }
+  button { cursor: pointer; font-weight: 600; transition: all 0.2s; }
+  .btn-start { background: #10b981; border-color: #10b981; color: #000; }
+  .btn-start:hover { background: #059669; }
+  .btn-stop { background: #ef4444; border-color: #ef4444; color: #fff; }
+  .btn-stop:hover { background: #dc2626; }
+  .btn-start:disabled, .btn-stop:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+  @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+
+  .video-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #18181b; aspect-ratio: 4/3; }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .video-overlay { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; justify-content: space-between; }
+  .badge { background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 6px; font-size: 13px; backdrop-filter: blur(4px); }
+  .badge-green { border: 1px solid #10b981; }
+  .badge-red { border: 1px solid #ef4444; }
+
+  .stats { display: flex; flex-direction: column; gap: 12px; }
+  .stat-card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; }
+  .stat-label { font-size: 12px; color: #71717a; text-transform: uppercase; letter-spacing: 1px; }
+  .stat-value { font-size: 36px; font-weight: 700; color: #10b981; margin-top: 4px; }
+  .stat-sub { font-size: 13px; color: #a1a1aa; margin-top: 2px; }
+
+  .phase-indicator { display: flex; align-items: center; gap: 8px; }
+  .phase-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .phase-up { background: #10b981; }
+  .phase-going_down { background: #eab308; }
+  .phase-down { background: #ef4444; }
+  .phase-going_up { background: #3b82f6; }
+
+  .feedback { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; margin-top: 12px; min-height: 60px; }
+  .feedback-text { font-size: 16px; line-height: 1.5; }
+
+  .form-bar { width: 100%; height: 8px; background: #27272a; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .form-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; }
+
+  .log { margin-top: 20px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #71717a; }
+  .log-entry { padding: 2px 0; }
+
+  .connection-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .connected .status-dot { background: #10b981; }
+  .disconnected .status-dot { background: #ef4444; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>TrainFree Vision</h1>
+  <p class="subtitle">Real-time AI rep counter — powered by MediaPipe + Roboflow</p>
+
+  <div class="controls">
+    <select id="exercise">
+      <option value="squat">Squats</option>
+      <option value="pushup">Push-ups</option>
+      <option value="bicep_curl">Bicep Curls</option>
+      <option value="deadlift">Deadlifts</option>
+      <option value="shoulder_press">Shoulder Press</option>
+    </select>
+    <label>Reps: <input type="number" id="targetReps" value="10" min="1" max="100"></label>
+    <label>Sets: <input type="number" id="targetSets" value="3" min="1" max="20"></label>
+    <label>Rest(s): <input type="number" id="restSec" value="60" min="10" max="300"></label>
+    <button id="startBtn" class="btn-start" onclick="startSession()">Start</button>
+    <button id="stopBtn" class="btn-stop" onclick="stopSession()" disabled>Stop</button>
+    <span id="connStatus" class="connection-status disconnected">
+      <span class="status-dot"></span> <span id="connText">Disconnected</span>
+    </span>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="video-overlay">
+          <span id="phaseBadge" class="badge badge-green">READY</span>
+          <span id="fpsBadge" class="badge">0 fps</span>
+        </div>
+      </div>
+      <div class="feedback">
+        <div id="feedbackText" class="feedback-text">Select an exercise and press Start to begin.</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Reps</div>
+        <div class="stat-value" id="repCount">0</div>
+        <div class="stat-sub" id="repTarget">/ 10</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Set</div>
+        <div class="stat-value" id="setCount">1</div>
+        <div class="stat-sub" id="setTarget">/ 3</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Phase</div>
+        <div class="phase-indicator">
+          <span class="phase-dot phase-up" id="phaseDot"></span>
+          <span id="phaseText">Standing</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Angle</div>
+        <div class="stat-value" id="angleValue" style="font-size:28px">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Form Score</div>
+        <div class="form-bar"><div class="form-fill" id="formFill" style="width:100%;background:#10b981"></div></div>
+        <div class="stat-sub" id="formText">100%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log" id="logBox"></div>
+</div>
+
+<canvas id="captureCanvas" style="display:none"></canvas>
+
+<script>
+// Change this port to match your running server
+const WS_URL = 'ws://localhost:8080/api/vision/ws/';
+const FPS = 12; // frames per second to send
+
+let ws = null;
+let stream = null;
+let captureInterval = null;
+let sessionId = null;
+let frameCount = 0;
+let lastFpsTime = Date.now();
+let fpsCount = 0;
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('captureCanvas');
+const ctx = canvas.getContext('2d');
+
+function log(msg) {
+  const box = document.getElementById('logBox');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  box.prepend(entry);
+  if (box.children.length > 100) box.removeChild(box.lastChild);
+}
+
+function setConnection(connected) {
+  const el = document.getElementById('connStatus');
+  const txt = document.getElementById('connText');
+  el.className = 'connection-status ' + (connected ? 'connected' : 'disconnected');
+  txt.textContent = connected ? 'Connected' : 'Disconnected';
+}
+
+async function startSession() {
+  sessionId = crypto.randomUUID();
+  const exercise = document.getElementById('exercise').value;
+  const targetReps = parseInt(document.getElementById('targetReps').value);
+  const targetSets = parseInt(document.getElementById('targetSets').value);
+  const restSec = parseInt(document.getElementById('restSec').value);
+
+  document.getElementById('repTarget').textContent = `/ ${targetReps}`;
+  document.getElementById('setTarget').textContent = `/ ${targetSets}`;
+
+  // Start webcam
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    });
+    video.srcObject = stream;
+    await video.play();
+    canvas.width = 640;
+    canvas.height = 480;
+  } catch (e) {
+    log('Camera error: ' + e.message);
+    alert('Cannot access camera. Please allow camera permissions.');
+    return;
+  }
+
+  // Connect WebSocket
+  ws = new WebSocket(WS_URL + sessionId);
+  ws.onopen = () => {
+    setConnection(true);
+    log('WebSocket connected');
+    // Send start message
+    ws.send(JSON.stringify({
+      type: 'start',
+      exercise: exercise,
+      target_reps: targetReps,
+      target_sets: targetSets,
+      rest_seconds: restSec,
+    }));
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    handleMessage(data);
+  };
+
+  ws.onclose = () => {
+    setConnection(false);
+    log('WebSocket disconnected');
+    stopCapture();
+  };
+
+  ws.onerror = (e) => {
+    log('WebSocket error');
+    setConnection(false);
+  };
+
+  // Start frame capture
+  captureInterval = setInterval(captureAndSend, 1000 / FPS);
+
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  log(`Started: ${exercise}, ${targetReps}x${targetSets}`);
+}
+
+function captureAndSend() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  ctx.save();
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1); // mirror
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  ws.send(JSON.stringify({ type: 'frame', data: dataUrl }));
+
+  // FPS counter
+  fpsCount++;
+  const now = Date.now();
+  if (now - lastFpsTime >= 1000) {
+    document.getElementById('fpsBadge').textContent = fpsCount + ' fps';
+    fpsCount = 0;
+    lastFpsTime = now;
+  }
+}
+
+function handleMessage(data) {
+  if (data.type === 'rep_update') {
+    document.getElementById('repCount').textContent = data.reps;
+    document.getElementById('setCount').textContent = data.current_set;
+    document.getElementById('angleValue').textContent = data.current_angle + '°';
+    document.getElementById('feedbackText').textContent = data.form_feedback;
+
+    // Phase
+    const phaseMap = { up: 'Standing', going_down: 'Going Down', down: 'Bottom', going_up: 'Coming Up' };
+    document.getElementById('phaseText').textContent = phaseMap[data.phase] || data.phase;
+    document.getElementById('phaseDot').className = 'phase-dot phase-' + data.phase;
+    document.getElementById('phaseBadge').textContent = (phaseMap[data.phase] || data.phase).toUpperCase();
+
+    // Form score
+    const pct = Math.round(data.form_score * 100);
+    document.getElementById('formFill').style.width = pct + '%';
+    document.getElementById('formFill').style.background = pct > 70 ? '#10b981' : pct > 40 ? '#eab308' : '#ef4444';
+    document.getElementById('formText').textContent = pct + '%';
+
+    if (data.set_complete) {
+      log(`Set ${data.sets_completed} complete!`);
+      if (data.workout_complete) {
+        log('WORKOUT COMPLETE!');
+        document.getElementById('feedbackText').textContent = data.form_feedback;
+      } else if (data.rest_seconds) {
+        startRestTimer(data.rest_seconds);
+      }
+    }
+  } else if (data.type === 'started') {
+    log(data.message);
+    document.getElementById('feedbackText').textContent = data.message;
+  } else if (data.type === 'no_pose') {
+    document.getElementById('feedbackText').textContent = data.message;
+  } else if (data.type === 'form_analysis') {
+    log(`Roboflow: ${data.message}`);
+  } else if (data.type === 'stopped') {
+    log('Stopped: ' + data.message);
+  }
+}
+
+function startRestTimer(seconds) {
+  let remaining = seconds;
+  document.getElementById('phaseBadge').textContent = 'RESTING';
+  const timer = setInterval(() => {
+    remaining--;
+    document.getElementById('feedbackText').textContent = `Rest... ${remaining}s remaining. Stay hydrated!`;
+    if (remaining <= 0) {
+      clearInterval(timer);
+      document.getElementById('feedbackText').textContent = 'Rest over — let\'s go! Next set!';
+      document.getElementById('phaseBadge').textContent = 'READY';
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'reset_set' }));
+      }
+    }
+  }, 1000);
+}
+
+function stopSession() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop' }));
+    ws.close();
+  }
+  stopCapture();
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  setConnection(false);
+  log('Session stopped');
+}
+
+function stopCapture() {
+  if (captureInterval) { clearInterval(captureInterval); captureInterval = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+</script>
+</body>
+</html>

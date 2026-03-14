@@ -42,7 +42,7 @@ async def answer_onboarding(
     db: AsyncSession = Depends(get_db),
 ):
     """Send a user message to the onboarding agent and get a response."""
-    result = await _agent.process_answer(db, body.session_id, body.message)
+    result = await _agent.process_answer(db, body.session_id, body.message, voice_context=body.voice_context)
     return OnboardingAnswerResponse(**result)
 
 

@@ -113,7 +113,7 @@ class OnboardingAgent:
         }
 
     async def process_answer(
-        self, db: AsyncSession, session_id: str, user_message: str
+        self, db: AsyncSession, session_id: str, user_message: str, voice_context: str | None = None
     ) -> dict:
         """Process a user message and return the agent's response."""
 
@@ -134,6 +134,14 @@ class OnboardingAgent:
         messages = []
         for msg in history:
             messages.append({"role": msg.role, "content": msg.content or ""})
+
+        # Inject voice context if switching from voice to chat
+        if voice_context:
+            messages.append({
+                "role": "system",
+                "content": f"The user was previously talking in voice mode. Here is the voice conversation so far:\n{voice_context}\n\nContinue from where you left off. Do NOT re-ask questions already answered above.",
+            })
+
         messages.append({"role": "user", "content": user_message})
 
         # Store user message

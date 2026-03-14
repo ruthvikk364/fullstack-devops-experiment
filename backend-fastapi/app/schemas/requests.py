@@ -14,6 +14,7 @@ class OnboardingAnswerRequest(BaseModel):
     """User sends a message during the onboarding conversation."""
     session_id: str
     message: str = Field(min_length=1, max_length=2000)
+    voice_context: str | None = None
 
 
 class WorkoutLogRequest(BaseModel):

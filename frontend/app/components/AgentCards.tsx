@@ -6,8 +6,15 @@ import { MessageCircle, Mic, ArrowRight } from "lucide-react";
 import ReactiveOrb from "./ReactiveOrb";
 import SpotlightCard from "./SpotlightCard";
 
+export interface CardRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface AgentCardsProps {
-  onSelectAgent: (agent: "mika" | "bheema") => void;
+  onSelectAgent: (agent: "mika" | "bheema", rect: CardRect) => void;
 }
 
 const agents = [
@@ -52,6 +59,12 @@ export default function AgentCards({ onSelectAgent }: AgentCardsProps) {
     offset: ["start end", "start 0.4"],
   });
   const lineScaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
+
+  const handleCardClick = (agentId: "mika" | "bheema", e: React.MouseEvent) => {
+    const card = (e.currentTarget as HTMLElement).closest("[data-agent-card]");
+    const r = card?.getBoundingClientRect() ?? { left: e.clientX - 150, top: e.clientY - 200, width: 300, height: 400 };
+    onSelectAgent(agentId, { x: r.left, y: r.top, width: r.width, height: r.height });
+  };
 
   return (
     <section id="agents" ref={sectionRef} className="pt-20 pb-32 px-6 bg-[#0a0a0a] relative scroll-mt-16">
@@ -121,9 +134,10 @@ export default function AgentCards({ onSelectAgent }: AgentCardsProps) {
                 }}
               >
                 <SpotlightCard
+                  data-agent-card
                   className={`rounded-2xl border ${agent.borderColor} glass-card cursor-pointer group transition-all duration-300`}
                   spotlightColor={agent.spotlightColor}
-                  onClick={() => onSelectAgent(agent.id)}
+                  onClick={(e) => handleCardClick(agent.id, e as React.MouseEvent)}
                 >
                   {/* Card image + orb overlay */}
                   <div className="relative h-48 overflow-hidden">

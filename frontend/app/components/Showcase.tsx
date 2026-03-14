@@ -2,6 +2,7 @@
 
 import { m } from "framer-motion";
 import { Mic, Camera, FileText, MessageCircle } from "lucide-react";
+import SpotlightCard from "./SpotlightCard";
 
 const capabilities = [
   {
@@ -13,6 +14,7 @@ const capabilities = [
     accent: "text-violet-400",
     borderHover: "group-hover:border-violet-400/30",
     iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
+    spotlightColor: "rgba(167, 139, 250, 0.08)",
   },
   {
     icon: Mic,
@@ -23,6 +25,7 @@ const capabilities = [
     accent: "text-orange-400",
     borderHover: "group-hover:border-orange-400/30",
     iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+    spotlightColor: "rgba(251, 146, 60, 0.08)",
   },
   {
     icon: Camera,
@@ -33,6 +36,7 @@ const capabilities = [
     accent: "text-orange-400",
     borderHover: "group-hover:border-orange-400/30",
     iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+    spotlightColor: "rgba(251, 146, 60, 0.08)",
   },
   {
     icon: FileText,
@@ -43,6 +47,7 @@ const capabilities = [
     accent: "text-violet-400",
     borderHover: "group-hover:border-violet-400/30",
     iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
+    spotlightColor: "rgba(167, 139, 250, 0.08)",
   },
 ];
 
@@ -84,30 +89,33 @@ export default function Showcase() {
                 initial={{ opacity: 0, y: 40, filter: "blur(6px)" }}
                 whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-60px" }}
-                whileHover={{ y: -5, transition: { duration: 0.3, ease: [0.25, 1, 0.5, 1] } }}
                 transition={{
                   duration: 0.6,
                   delay: idx * 0.1,
                   ease: [0.16, 1, 0.3, 1] as const,
                 }}
-                className={`group rounded-2xl border border-white/[0.06] ${cap.borderHover} glass-card shimmer-hover p-6 transition-all duration-300 cursor-default`}
               >
-                <div className="flex items-start gap-4">
-                  <div className={`shrink-0 w-10 h-10 rounded-xl ${cap.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:rotate-[-6deg] transition-all duration-300`}>
-                    <Icon className={`w-5 h-5 ${cap.accent}`} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <h3 className="text-base font-semibold group-hover:text-white transition-colors duration-300">{cap.title}</h3>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cap.iconBg} ${cap.accent} group-hover:scale-105 transition-transform duration-200`}>
-                        {cap.label}
-                      </span>
+                <SpotlightCard
+                  className={`group rounded-2xl border border-white/[0.06] ${cap.borderHover} glass-card shimmer-hover p-6 transition-all duration-300 cursor-default h-full`}
+                  spotlightColor={cap.spotlightColor}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`shrink-0 w-10 h-10 rounded-xl ${cap.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:rotate-[-6deg] transition-all duration-300`}>
+                      <Icon className={`w-5 h-5 ${cap.accent}`} />
                     </div>
-                    <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/55 transition-colors duration-300">
-                      {cap.description}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <h3 className="text-base font-semibold group-hover:text-white transition-colors duration-300">{cap.title}</h3>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cap.iconBg} ${cap.accent} group-hover:scale-105 transition-transform duration-200`}>
+                          {cap.label}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/55 transition-colors duration-300">
+                        {cap.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </SpotlightCard>
               </m.div>
             );
           })}

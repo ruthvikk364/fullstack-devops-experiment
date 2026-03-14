@@ -6,7 +6,8 @@ interface SpotlightCardProps {
   children: React.ReactNode;
   className?: string;
   spotlightColor?: string;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
+  "data-agent-card"?: boolean;
 }
 
 export default function SpotlightCard({
@@ -14,6 +15,7 @@ export default function SpotlightCard({
   className = "",
   spotlightColor = "rgba(167, 139, 250, 0.08)",
   onClick,
+  "data-agent-card": dataAgentCard,
 }: SpotlightCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [spotlight, setSpotlight] = useState({ x: 0, y: 0, active: false });
@@ -35,6 +37,7 @@ export default function SpotlightCard({
       onMouseMove={handleMouse}
       onMouseLeave={() => setSpotlight((s) => ({ ...s, active: false }))}
       onClick={onClick}
+      {...(dataAgentCard ? { "data-agent-card": "" } : {})}
       style={{
         transform: spotlight.active
           ? `perspective(800px) rotateY(${(spotlight.x - (ref.current?.offsetWidth || 0) / 2) * 0.015}deg) rotateX(${-(spotlight.y - (ref.current?.offsetHeight || 0) / 2) * 0.015}deg)`

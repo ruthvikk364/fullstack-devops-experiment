@@ -33,7 +33,7 @@ export default function Particles() {
       "255, 255, 255",
     ];
 
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 40; i++) {
       const x = Math.random() * w;
       const y = Math.random() * h;
       particles.push({
@@ -110,8 +110,8 @@ export default function Particles() {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 130) {
-            const alpha = 0.035 * (1 - dist / 130);
+          if (dist < 100) {
+            const alpha = 0.035 * (1 - dist / 100);
             ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
             ctx.lineWidth = 0.5;
             ctx.beginPath();

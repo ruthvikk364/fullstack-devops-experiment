@@ -436,10 +436,12 @@ export default function VoiceInterface({
 
   // ─── Fetch profile after onboarding (retries until PDF is ready) ─
   const fetchProfile = useCallback(async (userId: string, retries = 0) => {
+    console.log(`[Mika] Fetching profile for ${userId} (attempt ${retries + 1})`);
     try {
       const resp = await fetch(`${API_BASE}/onboarding/profile/${userId}`);
       if (resp.ok) {
         const data = await resp.json();
+        console.log("[Mika] Profile fetched:", { name: data.name, bmi: !!data.bmi, pdf_available: data.pdf_available });
         setProfileData(data);
         // Save to localStorage so Navbar can show profile info
         try { localStorage.setItem("trainfree_profile", JSON.stringify(data)); } catch {}
@@ -447,10 +449,22 @@ export default function VoiceInterface({
         window.dispatchEvent(new Event("trainfree_profile_updated"));
         // If PDF not ready yet, retry up to 5 times
         if (!data.pdf_available && retries < 5) {
+          console.log("[Mika] PDF not ready, retrying in 3s...");
+          setTimeout(() => fetchProfile(userId, retries + 1), 3000);
+        }
+      } else {
+        console.error("[Mika] Profile fetch failed:", resp.status);
+        // Retry on failure too
+        if (retries < 5) {
           setTimeout(() => fetchProfile(userId, retries + 1), 3000);
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error("[Mika] Profile fetch error:", e);
+      if (retries < 5) {
+        setTimeout(() => fetchProfile(userId, retries + 1), 3000);
+      }
+    }
   }, []);
 
   // ─── Init on agent change ─────────────────────────────────────
@@ -495,6 +509,7 @@ export default function VoiceInterface({
     setStatusText("Connecting to Mika...");
     try {
       // First get a backend session for chat fallback
+      console.log("[Mika] Starting onboarding session...");
       const resp = await fetch(`${API_BASE}/onboarding/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -504,6 +519,7 @@ export default function VoiceInterface({
       const data = await resp.json();
       sessionIdRef.current = data.session_id;
       userIdRef.current = data.user_id;
+      console.log("[Mika] Session started:", { session_id: data.session_id, user_id: data.user_id });
       // Now auto-connect voice (will greet via voice)
       connectMikaVoice();
     } catch (e: any) {
@@ -517,20 +533,42 @@ export default function VoiceInterface({
     }
   }
 
+  // ─── Farewell pattern (shared) ─────────────────────────────────
+  const farewellPattern = /\b(bye|goodbye|farewell|take care|see you|good luck|amazing.*journey|best of luck)\b/i;
+
+  // ─── End conversation helper ────────────────────────────────────
+  const endConversation = useCallback(() => {
+    console.log("[Mika] Conversation ended — cleaning up");
+    setConversationClosed(true);
+    setTimeout(() => {
+      cleanupVoice();
+      setStatusText("Conversation complete");
+    }, 1500);
+  }, [cleanupVoice]);
+
   // ─── MIKA: Send chat message (text input) ─────────────────────
   const sendMikaMessage = useCallback(
     async (text: string) => {
-      if (!text.trim() || onboardingComplete) return;
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      if (!text.trim() || conversationClosed) return;
+      const trimmed = text.trim();
+      setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
       setInput("");
+
+      // If user says bye after onboarding → end conversation
+      if (onboardingCompleteRef.current && farewellPattern.test(trimmed)) {
+        console.log("[Mika] User said bye in chat — ending conversation");
+        endConversation();
+        return;
+      }
 
       // If voice WS is open (active or paused), send text through it to keep context
       if (realtimeWsRef.current?.readyState === WebSocket.OPEN) {
+        console.log("[Mika] Sending chat message through voice WS");
         realtimeWsRef.current.send(JSON.stringify({
           type: "conversation.item.create",
           item: {
             type: "message", role: "user",
-            content: [{ type: "input_text", text }],
+            content: [{ type: "input_text", text: trimmed }],
           },
         }));
         realtimeWsRef.current.send(JSON.stringify({ type: "response.create" }));
@@ -540,6 +578,7 @@ export default function VoiceInterface({
       // Fallback: use chat API with conversation context
       if (!sessionIdRef.current) return;
       setIsProcessing(true);
+      console.log("[Mika] Sending chat message via HTTP fallback");
       try {
         // Build context from voice transcript so backend knows what was discussed
         const voiceContext = messagesRef.current
@@ -551,32 +590,39 @@ export default function VoiceInterface({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionIdRef.current,
-            message: text,
+            message: trimmed,
             voice_context: voiceContext || undefined,
           }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
+        console.log("[Mika] Chat API response:", { onboarding_complete: data.onboarding_complete, plan_generated: data.plan_generated });
+
+        // Strip PROFILE_COMPLETE from display
+        let displayMsg = data.message || "";
+        if (displayMsg.includes("PROFILE_COMPLETE:")) {
+          displayMsg = displayMsg.replace(/PROFILE_COMPLETE:\{[\s\S]*?\}(?=\s|$)/g, "").trim();
+          if (!displayMsg) displayMsg = "Your profile is complete! Generating your plan now...";
+        }
 
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.message },
+          { role: "assistant", content: displayMsg },
         ]);
 
         if (data.onboarding_complete) {
+          console.log("[Mika] Onboarding complete via chat API, plan_generated:", data.plan_generated);
           setOnboardingComplete(true);
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: data.plan_generated
-                ? "Your fitness plan has been generated and emailed!"
-                : "Onboarding complete! Your plan is being processed...",
-            },
-          ]);
           if (userIdRef.current) fetchProfile(userIdRef.current);
         }
+
+        // Detect farewell in assistant response (chat API path)
+        if (onboardingCompleteRef.current && farewellPattern.test(displayMsg)) {
+          console.log("[Mika] Farewell detected in chat response — ending conversation");
+          endConversation();
+        }
       } catch (e: any) {
+        console.error("[Mika] Chat API error:", e);
         setMessages((prev) => [
           ...prev,
           {
@@ -588,7 +634,7 @@ export default function VoiceInterface({
         setIsProcessing(false);
       }
     },
-    [onboardingComplete, fetchProfile, isListening]
+    [conversationClosed, fetchProfile, endConversation]
   );
 
   // ─── Audio playback (gapless scheduled) ────────────────────────
@@ -619,6 +665,7 @@ export default function VoiceInterface({
   // ─── MIKA: Save voice transcript to backend ───────────────────
   const saveVoiceTranscript = useCallback(async (userText: string, assistantText: string) => {
     if (!sessionIdRef.current || !userIdRef.current) return;
+    console.log("[Mika] Saving voice transcript to backend:", { userText: userText.substring(0, 50), hasProfileComplete: assistantText.includes("PROFILE_COMPLETE") });
     try {
       const res = await fetch(`${API_BASE}/onboarding/voice-transcript`, {
         method: "POST",
@@ -632,12 +679,17 @@ export default function VoiceInterface({
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("[Mika] Voice transcript saved:", { onboarding_complete: data.onboarding_complete, plan_generated: data.plan_generated });
         if (data.onboarding_complete) {
           setOnboardingComplete(true);
           if (userIdRef.current) fetchProfile(userIdRef.current);
         }
+      } else {
+        console.error("[Mika] Voice transcript save failed:", res.status);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[Mika] Voice transcript save error:", e);
+    }
   }, [fetchProfile]);
 
   // ─── MIKA: Connect voice (direct OpenAI WS with ephemeral key) ─
@@ -809,7 +861,7 @@ export default function VoiceInterface({
             if (data.delta) {
               currentAssistantText += data.delta;
               // Don't show PROFILE_COMPLETE JSON in streaming transcript
-              const cleaned = currentAssistantText.replace(/PROFILE_COMPLETE:\{[^}]*\}?/g, "").trim();
+              const cleaned = currentAssistantText.replace(/PROFILE_COMPLETE:\{[\s\S]*?\}?(?=\s|$)/g, "").trim();
               setAgentTranscript(cleaned);
             }
             break;
@@ -817,25 +869,24 @@ export default function VoiceInterface({
           case "response.audio_transcript.done":
             if (data.transcript) {
               const rawText = data.transcript.trim();
+              console.log("[Mika] Voice transcript done:", rawText.substring(0, 100));
 
               // Strip PROFILE_COMPLETE JSON from display text
               let displayText = rawText;
               if (rawText.includes("PROFILE_COMPLETE:")) {
-                displayText = rawText.replace(/PROFILE_COMPLETE:\{[^}]*\}/g, "").trim();
+                displayText = rawText.replace(/PROFILE_COMPLETE:\{[\s\S]*?\}(?=\s|$)/g, "").trim();
                 if (!displayText) displayText = "Your profile is complete! Generating your plan now...";
-                // Trigger onboarding complete
+                console.log("[Mika] PROFILE_COMPLETE detected in voice transcript");
                 setOnboardingComplete(true);
                 if (userIdRef.current) {
-                  // Small delay to let backend process the profile
                   setTimeout(() => fetchProfile(userIdRef.current!), 2000);
                 }
               }
 
               // Detect conversation end — farewell after onboarding
-              const farewellPattern = /\b(bye|goodbye|farewell|take care|see you|good luck|amazing.*journey|best of luck)\b/i;
               if (onboardingCompleteRef.current && farewellPattern.test(displayText)) {
+                console.log("[Mika] Farewell detected in voice — ending conversation");
                 setConversationClosed(true);
-                // Stop voice after farewell audio finishes
                 setTimeout(() => {
                   cleanupVoice();
                   setStatusText("Conversation complete");
@@ -863,7 +914,7 @@ export default function VoiceInterface({
           case "response.text.delta":
             if (data.delta) {
               currentAssistantText += data.delta;
-              const cleaned = currentAssistantText.replace(/PROFILE_COMPLETE:\{[^}]*\}?/g, "").trim();
+              const cleaned = currentAssistantText.replace(/PROFILE_COMPLETE:\{[\s\S]*?\}?(?=\s|$)/g, "").trim();
               setAgentTranscript(cleaned);
             }
             break;
@@ -871,18 +922,20 @@ export default function VoiceInterface({
           case "response.text.done":
             if (data.text) {
               const rawText = data.text.trim();
+              console.log("[Mika] Text response done:", rawText.substring(0, 100));
               let displayText = rawText;
               if (rawText.includes("PROFILE_COMPLETE:")) {
-                displayText = rawText.replace(/PROFILE_COMPLETE:\{[^}]*\}/g, "").trim();
+                displayText = rawText.replace(/PROFILE_COMPLETE:\{[\s\S]*?\}(?=\s|$)/g, "").trim();
                 if (!displayText) displayText = "Your profile is complete! Generating your plan now...";
+                console.log("[Mika] PROFILE_COMPLETE detected in text response");
                 setOnboardingComplete(true);
                 if (userIdRef.current) {
                   setTimeout(() => fetchProfile(userIdRef.current!), 2000);
                 }
               }
               // Detect farewell in text response too
-              const textFarewellPattern = /\b(bye|goodbye|farewell|take care|see you|good luck|amazing.*journey|best of luck)\b/i;
-              if (onboardingCompleteRef.current && textFarewellPattern.test(displayText)) {
+              if (onboardingCompleteRef.current && farewellPattern.test(displayText)) {
+                console.log("[Mika] Farewell detected in text response — ending conversation");
                 setConversationClosed(true);
                 setTimeout(() => {
                   cleanupVoice();
@@ -1492,28 +1545,37 @@ export default function VoiceInterface({
                 </div>
               </div>
 
-              {/* Profile cards — show during onboarding complete OR conversation closed */}
+              {/* Profile cards — show as soon as profile data is ready (in parallel with chat) */}
               {onboardingComplete && profileData && (
                 <div className={`px-6 pb-4 ${conversationClosed ? "flex-1 overflow-y-auto" : ""}`}>
                   {conversationClosed && (
                     <m.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="max-w-2xl mx-auto mb-4 text-center"
+                      className="max-w-2xl mx-auto mb-6 text-center"
                     >
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-2">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Conversation Complete
+                      <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium mb-3">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Chat Ended
                       </div>
-                      <p className="text-white/30 text-xs">Your personalized plan has been generated and sent to your email!</p>
+                      <p className="text-white/30 text-xs mb-4">Your personalized plan has been generated and sent to your email!</p>
+                      <m.button
+                        onClick={handleClose}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-500/20"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Home
+                      </m.button>
                     </m.div>
                   )}
                   <ProfileCards profile={profileData} />
                 </div>
               )}
 
-              {/* Chat input — visible only when onboarding not complete */}
-              {!onboardingComplete && (
+              {/* Chat input — visible until conversation is closed (stays during onboarding complete so user can say bye) */}
+              {!conversationClosed && (
                 <m.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1531,7 +1593,13 @@ export default function VoiceInterface({
                       type="text"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={isListening ? "Type while voice is active..." : "Type your message to Mika..."}
+                      placeholder={
+                        onboardingComplete
+                          ? "Say bye to end the conversation..."
+                          : isListening
+                            ? "Type while voice is active..."
+                            : "Type your message to Mika..."
+                      }
                       disabled={isProcessing}
                       className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-400/40 focus:bg-white/[0.07] transition-all disabled:opacity-40"
                     />

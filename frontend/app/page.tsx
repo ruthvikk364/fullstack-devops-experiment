@@ -84,7 +84,6 @@ export default function Home() {
       <VoiceInterface
         agent={activeAgent}
         onClose={() => setActiveAgent(null)}
-        cardRect={cardRect}
       />
 
       {/* Exit-intent CTA toast */}

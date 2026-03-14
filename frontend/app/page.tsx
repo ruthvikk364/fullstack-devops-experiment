@@ -1,27 +1,49 @@
+"use client";
+
+import { useState } from "react";
+import { m, useScroll, useSpring } from "framer-motion";
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
 import Features from "./components/Features";
-import HowItWorks from "./components/HowItWorks";
-import AiDemo from "./components/AiDemo";
-import Pricing from "./components/Pricing";
-import Testimonials from "./components/Testimonials";
-import Cta from "./components/Cta";
+import Showcase from "./components/Showcase";
+import AgentCards from "./components/AgentCards";
+import VoiceInterface from "./components/VoiceInterface";
 import Footer from "./components/Footer";
+import Particles from "./components/Particles";
 
 export default function Home() {
+  const [activeAgent, setActiveAgent] = useState<"mika" | "bheema" | null>(
+    null
+  );
+
+  // Scroll progress bar
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001,
+  });
+
   return (
-    <>
+    <div className="bg-[#0a0a0a] min-h-screen noise-bg">
+      {/* Scroll progress indicator */}
+      <m.div
+        style={{ scaleX, transformOrigin: "left" }}
+        className="fixed top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-orange-400 z-[60]"
+      />
+      <Particles />
       <Navbar />
-      <main>
+      <main className="relative z-10">
         <Hero />
         <Features />
-        <HowItWorks />
-        <AiDemo />
-        <Pricing />
-        <Testimonials />
-        <Cta />
+        <Showcase />
+        <AgentCards onSelectAgent={setActiveAgent} />
       </main>
       <Footer />
-    </>
+      <VoiceInterface
+        agent={activeAgent}
+        onClose={() => setActiveAgent(null)}
+      />
+    </div>
   );
 }

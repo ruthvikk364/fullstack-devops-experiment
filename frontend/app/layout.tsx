@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrainFree — AI-Powered Personal Fitness Coach",
+  title: "TrainFree — AI Training Partners",
   description:
-    "Personalized workouts, smart nutrition, and real-time AI coaching that adapts to your body and goals. Start free.",
+    "Meet Mika and Bheema, your AI-powered nutrition and training voice agents.",
 };
 
 export default function RootLayout({
@@ -25,8 +26,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

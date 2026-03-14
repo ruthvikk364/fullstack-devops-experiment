@@ -1,69 +1,48 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Dumbbell } from "lucide-react";
-
-const links = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Testimonials", href: "#testimonials" },
-];
+import { m, useScroll, useTransform } from "framer-motion";
+import { Zap, Dumbbell } from "lucide-react";
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", h, { passive: true });
-    return () => window.removeEventListener("scroll", h);
-  }, []);
+  const { scrollY } = useScroll();
+  const bgOpacity = useTransform(scrollY, [0, 100], [0, 0.85]);
+  const borderOpacity = useTransform(scrollY, [0, 100], [0, 0.05]);
 
   return (
-    <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-[#050505]/80 backdrop-blur-xl border-b border-white/[0.06]"
-          : ""
-      }`}
+    <m.nav
+      style={{
+        backgroundColor: `rgba(10, 10, 10, ${bgOpacity})`,
+        borderBottomColor: `rgba(255, 255, 255, ${borderOpacity})`,
+      }}
+      className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b"
     >
-      <div className="section-container flex h-[72px] items-center justify-between">
-        {/* Logo */}
-        <a href="#" className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500">
-            <Dumbbell className="h-5 w-5 text-white" strokeWidth={2.5} />
-          </span>
-          <span className="text-[20px] font-bold tracking-tight">
-            Train<span className="text-emerald-400">Free</span>
-          </span>
-        </a>
-
-        {/* Center nav */}
-        <nav className="flex items-center gap-10">
-          {links.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="text-[14px] text-zinc-400 transition-colors hover:text-white"
-            >
-              {l.label}
-            </a>
-          ))}
-        </nav>
-
-        {/* Right CTAs */}
-        <div className="flex items-center gap-5">
-          <a href="#" className="text-[14px] text-zinc-400 transition-colors hover:text-white">
-            Sign in
-          </a>
+      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <m.a
+          href="#"
+          className="flex items-center gap-2 group"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          <Dumbbell className="w-5 h-5 text-violet-400 group-hover:text-orange-400 transition-colors duration-300" />
+          <span className="text-lg font-bold tracking-tight">TrainFree</span>
+        </m.a>
+        <div className="flex items-center gap-6 text-sm text-white/40">
           <a
-            href="#"
-            className="rounded-full bg-emerald-500 px-6 py-2.5 text-[14px] font-semibold text-white transition-all hover:bg-emerald-400 hover:shadow-[0_0_24px_rgba(16,185,129,0.3)]"
+            href="#agents"
+            className="hover:text-white transition-colors duration-300"
+          >
+            Agents
+          </a>
+          <m.a
+            href="#agents"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="px-5 py-1.5 rounded-full border border-white/10 hover:border-violet-400/30 hover:text-white hover:bg-white/5 transition-all duration-300"
           >
             Get Started
-          </a>
+          </m.a>
         </div>
       </div>
-    </header>
+    </m.nav>
   );
 }

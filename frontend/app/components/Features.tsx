@@ -1,108 +1,160 @@
+"use client";
+
+import { m, useScroll, useTransform } from "framer-motion";
+import { useRef } from "react";
 import {
-  MessageSquare,
   Dumbbell,
   Apple,
-  Watch,
-  BarChart3,
+  Mic,
   Brain,
+  Clock,
+  TrendingUp,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
-interface Feature {
-  icon: LucideIcon;
-  color: string;
-  bg: string;
-  title: string;
-  desc: string;
-}
-
-const features: Feature[] = [
+const features = [
   {
-    icon: MessageSquare,
-    color: "#34d399",
-    bg: "rgba(16,185,129,0.1)",
-    title: "AI Personal Coach",
-    desc: "Chat with your AI coach anytime. Get real-time guidance, form tips, and motivation — like having a personal trainer in your pocket.",
-  },
-  {
-    icon: Dumbbell,
-    color: "#60a5fa",
-    bg: "rgba(59,130,246,0.1)",
-    title: "Smart Workouts",
-    desc: "Auto-generated workout plans tailored to your goals, equipment, schedule, and fitness level. Adapts as you progress.",
-  },
-  {
-    icon: Apple,
-    color: "#fb923c",
-    bg: "rgba(249,115,22,0.1)",
-    title: "Nutrition Tracking",
-    desc: "AI-powered meal plans and food logging. Describe what you ate in plain English — our AI calculates macros instantly.",
-  },
-  {
-    icon: Watch,
-    color: "#a78bfa",
-    bg: "rgba(139,92,246,0.1)",
-    title: "Wearable Sync",
-    desc: "Connect Google Fit, Fitbit, Garmin, or Whoop. Heart rate, sleep, and recovery data inform every recommendation.",
-  },
-  {
-    icon: BarChart3,
-    color: "#fb7185",
-    bg: "rgba(244,63,94,0.1)",
-    title: "Progress Analytics",
-    desc: "Visualize your journey with detailed charts. Track strength gains, weight trends, body composition, and consistency.",
+    icon: Mic,
+    title: "Voice-First Coaching",
+    description:
+      "Just speak naturally. No typing, no scrolling through apps mid-workout.",
+    accent: "text-violet-400",
+    bg: "bg-violet-400/5 border-violet-400/10",
   },
   {
     icon: Brain,
-    color: "#2dd4bf",
-    bg: "rgba(45,212,191,0.1)",
-    title: "Evidence-Based",
-    desc: "Every recommendation is grounded in sports science and nutrition research via RAG. No bro-science — proven methods only.",
+    title: "AI That Adapts to You",
+    description:
+      "Your agents learn your preferences, goals, and progress over time.",
+    accent: "text-orange-400",
+    bg: "bg-orange-400/5 border-orange-400/10",
+  },
+  {
+    icon: Dumbbell,
+    title: "No Trainer Needed",
+    description:
+      "Get expert-level workout programming without the gym-floor price tag.",
+    accent: "text-violet-400",
+    bg: "bg-violet-400/5 border-violet-400/10",
+  },
+  {
+    icon: Apple,
+    title: "Nutrition on Demand",
+    description:
+      "Meal plans, macro tracking, and dietary advice — all through a quick chat.",
+    accent: "text-orange-400",
+    bg: "bg-orange-400/5 border-orange-400/10",
+  },
+  {
+    icon: Clock,
+    title: "Available 24/7",
+    description:
+      "Early morning or late night session — your AI partners never clock out.",
+    accent: "text-violet-400",
+    bg: "bg-violet-400/5 border-violet-400/10",
+  },
+  {
+    icon: TrendingUp,
+    title: "Track Your Progress",
+    description:
+      "Built-in tracking helps you see results and stay on course with your goals.",
+    accent: "text-orange-400",
+    bg: "bg-orange-400/5 border-orange-400/10",
   },
 ];
 
 export default function Features() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "start 0.3"],
+  });
+  const lineScaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
+
   return (
-    <section id="features" className="py-[120px]">
-      <div className="section-container">
+    <section
+      ref={sectionRef}
+      className="py-32 px-6 bg-[#0a0a0a] relative"
+    >
+      {/* Divider */}
+      <div className="absolute top-0 left-0 right-0 flex justify-center">
+        <m.div
+          style={{ scaleX: lineScaleX }}
+          className="h-[1px] w-full max-w-md gradient-line origin-center"
+        />
+      </div>
+
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
-        <div className="text-center">
-          <p className="text-[12px] font-bold uppercase tracking-[0.25em] text-emerald-400">
-            Features
-          </p>
-          <h2 className="mt-4 text-[48px] font-bold leading-tight tracking-tight">
-            Everything you need to{" "}
-            <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-              train smarter
-            </span>
-          </h2>
-          <p className="mx-auto mt-5 max-w-[520px] text-[17px] leading-relaxed text-zinc-400">
-            Powered by advanced AI and backed by science. Coaching, planning,
-            tracking, and analytics — all in one platform.
-          </p>
+        <div className="text-center mb-20">
+          <m.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as const }}
+            className="inline-block px-3 py-1 text-[10px] font-medium tracking-widest uppercase text-white/30 border border-white/10 rounded-full mb-4"
+          >
+            Why TrainFree
+          </m.span>
+          <m.h2
+            initial={{ opacity: 0, y: 30, filter: "blur(6px)" }}
+            whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{
+              duration: 0.6,
+              delay: 0.1,
+              ease: [0.16, 1, 0.3, 1] as const,
+            }}
+            className="text-4xl sm:text-5xl font-bold tracking-tight mb-4"
+          >
+            Train Smarter, Not Harder
+          </m.h2>
+          <m.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{
+              duration: 0.5,
+              delay: 0.2,
+              ease: [0.16, 1, 0.3, 1] as const,
+            }}
+            className="text-white/35 max-w-lg mx-auto leading-relaxed"
+          >
+            Your AI fitness partners bring the expertise of a personal trainer
+            and nutritionist — right to your voice.
+          </m.p>
         </div>
 
-        {/* Grid */}
-        <div className="mt-[64px] grid grid-cols-3 gap-6">
-          {features.map((f) => (
-            <div
-              key={f.title}
-              className="group rounded-2xl border border-white/[0.05] bg-white/[0.02] p-9 transition-all duration-300 hover:border-emerald-500/20 hover:bg-white/[0.04]"
-            >
-              <div
-                className="mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-xl"
-                style={{ background: f.bg }}
+        {/* Feature grid */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {features.map((feature, idx) => {
+            const Icon = feature.icon;
+            return (
+              <m.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{
+                  duration: 0.5,
+                  delay: idx * 0.08,
+                  ease: [0.16, 1, 0.3, 1] as const,
+                }}
+                className={`group rounded-2xl border ${feature.bg} p-6 hover:bg-white/[0.03] transition-all duration-300`}
               >
-                <f.icon className="h-6 w-6" style={{ color: f.color }} />
-              </div>
-              <h3 className="text-[18px] font-semibold text-white transition-colors group-hover:text-emerald-300">
-                {f.title}
-              </h3>
-              <p className="mt-3 text-[15px] leading-[1.7] text-zinc-500">
-                {f.desc}
-              </p>
-            </div>
-          ))}
+                <div
+                  className={`inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 ${feature.accent} mb-4 group-hover:scale-110 transition-transform duration-300`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-semibold mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-white/35 leading-relaxed">
+                  {feature.description}
+                </p>
+              </m.div>
+            );
+          })}
         </div>
       </div>
     </section>

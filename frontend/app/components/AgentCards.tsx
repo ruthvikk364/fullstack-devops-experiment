@@ -2,7 +2,7 @@
 
 import { m, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { MessageCircle, Mic, ArrowRight } from "lucide-react";
+import { Mic, ArrowRight } from "lucide-react";
 import ReactiveOrb from "./ReactiveOrb";
 import SpotlightCard from "./SpotlightCard";
 
@@ -24,7 +24,7 @@ const agents = [
     role: "Nutrition Agent",
     description:
       "Handles member onboarding, collects fitness profiles, generates personalized meal plans, and delivers PDF guides — all through voice or chat.",
-    icon: MessageCircle,
+    icon: Mic,
     accentClass: "text-violet-400",
     buttonClass: "bg-violet-500 hover:bg-violet-400 text-white",
     orbColor: "#a78bfa",

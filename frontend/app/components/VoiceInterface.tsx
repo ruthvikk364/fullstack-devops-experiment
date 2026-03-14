@@ -1359,67 +1359,8 @@ export default function VoiceInterface({
           {isMika ? (
             /* ══════════ MIKA — UNIFIED: orb + transcript + chat ══════════ */
             <div className="flex-1 flex flex-col min-h-0">
-              {/* Paragraph transcript area */}
-              <div
-                ref={scrollContainerRef}
-                className="shrink-0 px-6 py-4 max-h-48 overflow-y-auto"
-                style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
-              >
-                <div className="max-w-2xl mx-auto">
-                  {(messages.length > 0 || agentTranscript) ? (
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, wordBreak: "break-word" }}>
-                      {messages.map((msg, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          {msg.role === "user" ? (
-                            <span className="text-violet-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
-                          ) : msg.role === "system" ? (
-                            <span className="text-emerald-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
-                          ) : (
-                            <span className="text-violet-50">{msg.content}</span>
-                          )}
-                        </span>
-                      ))}
-                      {/* Interim agent transcript (streaming) */}
-                      {agentTranscript && (
-                        <>
-                          {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          <span className="text-violet-50" style={{ opacity: 0.6 }}>{agentTranscript}</span>
-                        </>
-                      )}
-                      {/* Typing dots for chat API */}
-                      {isProcessing && (
-                        <>
-                          <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>
-                          <span className="inline-flex items-center" style={{ gap: 3, verticalAlign: "middle" }}>
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0s" }} />
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.2s" }} />
-                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.4s" }} />
-                          </span>
-                        </>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-center text-white/20 text-sm mt-4">
-                      Connecting to Mika...
-                    </p>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </div>
-
               {/* Center: Orb + Waveform + Status (hidden when conversation closed) */}
-              <div className={`flex flex-col items-center justify-center relative min-h-0 transition-all duration-500 ${conversationClosed ? "h-0 overflow-hidden opacity-0" : "flex-1"}`}>
-                <m.div
-                  className="absolute inset-0 pointer-events-none"
-                  animate={{ opacity: isListening ? 1 : 0.4 }}
-                  transition={{ duration: 0.8 }}
-                  style={{
-                    background:
-                      "radial-gradient(ellipse 60% 50% at center, rgba(167,139,250,0.06) 0%, transparent 70%)",
-                  }}
-                />
-
+              <div className={`flex flex-col items-center justify-start pt-6 relative min-h-0 transition-all duration-500 ${conversationClosed ? "h-0 overflow-hidden opacity-0" : "flex-1"}`}>
                 {/* Orb — click to toggle voice */}
                 <m.div
                   initial={{ opacity: 0, scale: 0.5 }}
@@ -1490,6 +1431,53 @@ export default function VoiceInterface({
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Chat transcript — below listening, max 5 lines, autoscroll */}
+                <div
+                  ref={scrollContainerRef}
+                  className="w-full px-6 py-3 overflow-y-auto"
+                  style={{ overscrollBehavior: "contain", scrollbarWidth: "none", maxHeight: "7.5rem" }}
+                >
+                  <div className="max-w-2xl mx-auto">
+                    {(messages.length > 0 || agentTranscript) ? (
+                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>
+                      {messages.map((msg, i) => (
+                        <span key={i}>
+                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                          {msg.role === "user" ? (
+                            <span className="text-violet-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
+                          ) : msg.role === "system" ? (
+                            <span className="text-emerald-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
+                          ) : (
+                            <span className="text-violet-50">{msg.content}</span>
+                          )}
+                        </span>
+                      ))}
+                      {agentTranscript && (
+                        <>
+                          {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                          <span className="text-violet-50" style={{ opacity: 0.6 }}>{agentTranscript}</span>
+                        </>
+                      )}
+                      {isProcessing && (
+                        <>
+                          <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>
+                          <span className="inline-flex items-center" style={{ gap: 3, verticalAlign: "middle" }}>
+                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0s" }} />
+                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.2s" }} />
+                            <span className="inline-block rounded-full bg-violet-400/50" style={{ width: 5, height: 5, animation: "dot-bounce 1.4s infinite 0.4s" }} />
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-center text-white/20 text-sm">
+                      Connecting to Mika...
+                    </p>
+                  )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
               </div>
 
               {/* Profile cards — show during onboarding complete OR conversation closed */}
@@ -1551,55 +1539,8 @@ export default function VoiceInterface({
           ) : (
             /* ══════════ BHEEMA: Voice + Exercise Picker ══════════ */
             <div className="flex-1 flex flex-col min-h-0">
-              {/* Transcript area */}
-              <div
-                ref={scrollContainerRef}
-                className="shrink-0 px-6 py-4 max-h-48 overflow-y-auto"
-                style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
-              >
-                <div className="max-w-2xl mx-auto">
-                  {(messages.length > 0 || bheemaAgentTranscript) ? (
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, wordBreak: "break-word" }}>
-                      {messages.map((msg, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          {msg.role === "user" ? (
-                            <span className="text-orange-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
-                          ) : msg.role === "system" ? (
-                            <span className="text-orange-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
-                          ) : (
-                            <span className="text-orange-50">{msg.content}</span>
-                          )}
-                        </span>
-                      ))}
-                      {bheemaAgentTranscript && (
-                        <>
-                          {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          <span className="text-orange-50" style={{ opacity: 0.6 }}>{bheemaAgentTranscript}</span>
-                        </>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-center text-white/20 text-sm mt-4">
-                      Connecting to Coach Bheema...
-                    </p>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              </div>
-
               {/* Center: Orb + Camera + Controls */}
-              <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
-                <m.div
-                  className="absolute inset-0 pointer-events-none"
-                  animate={{ opacity: isListening ? 1 : 0.4 }}
-                  transition={{ duration: 0.8 }}
-                  style={{
-                    background:
-                      "radial-gradient(ellipse 60% 50% at center, rgba(251,146,60,0.06) 0%, transparent 70%)",
-                  }}
-                />
-
+              <div className="flex-1 flex flex-col items-center justify-start pt-6 relative min-h-0">
                 {/* Camera preview */}
                 {cameraActive && (
                   <div className="absolute top-4 right-4 w-48 h-36 rounded-xl overflow-hidden border border-orange-400/30 shadow-lg z-10">
@@ -1710,6 +1651,43 @@ export default function VoiceInterface({
                       </m.p>
                     )}
                   </AnimatePresence>
+                </div>
+
+                {/* Chat transcript — between orb and camera, max 5 lines, autoscroll */}
+                <div
+                  ref={scrollContainerRef}
+                  className="w-full px-6 py-3 overflow-y-auto"
+                  style={{ overscrollBehavior: "contain", scrollbarWidth: "none", maxHeight: "7.5rem" }}
+                >
+                  <div className="max-w-2xl mx-auto">
+                    {(messages.length > 0 || bheemaAgentTranscript) ? (
+                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>
+                        {messages.map((msg, i) => (
+                          <span key={i}>
+                            {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" · "}</span>}
+                            {msg.role === "user" ? (
+                              <span className="text-orange-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
+                            ) : msg.role === "system" ? (
+                              <span className="text-orange-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
+                            ) : (
+                              <span className="text-orange-50">{msg.content}</span>
+                            )}
+                          </span>
+                        ))}
+                        {bheemaAgentTranscript && (
+                          <>
+                            {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" · "}</span>}
+                            <span className="text-orange-50" style={{ opacity: 0.6 }}>{bheemaAgentTranscript}</span>
+                          </>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-center text-white/20 text-sm">
+                        Connecting to Coach Bheema...
+                      </p>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
                 </div>
 
                 {/* Camera button */}

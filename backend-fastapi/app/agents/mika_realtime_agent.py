@@ -12,7 +12,7 @@ from app.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5"
 
 MIKA_SYSTEM_PROMPT = """You are Mika, a friendly and motivational AI fitness coach for the TrainFree platform.
 

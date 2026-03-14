@@ -20,7 +20,7 @@ from app.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5"
 
 DAYS_MAP = {
     0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday",

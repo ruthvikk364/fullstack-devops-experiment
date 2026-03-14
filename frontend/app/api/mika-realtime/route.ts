@@ -172,7 +172,7 @@ export async function POST() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-realtime-preview",
+          model: "gpt-realtime-1.5",
           modalities: ["text", "audio"],
           voice: "shimmer",
           instructions: MIKA_SYSTEM_PROMPT,

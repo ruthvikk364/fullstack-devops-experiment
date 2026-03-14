@@ -710,7 +710,7 @@ export default function VoiceInterface({
 
       // 3. Open direct WS to OpenAI
       const ws = new WebSocket(
-        "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
+        "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
         ["realtime", `openai-insecure-api-key.${ephemeralKey}`, "openai-beta.realtime-v1"]
       );
       realtimeWsRef.current = ws;
@@ -1064,7 +1064,7 @@ export default function VoiceInterface({
 
       // 3. Open direct WS to OpenAI
       const ws = new WebSocket(
-        "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
+        "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
         ["realtime", `openai-insecure-api-key.${ephemeralKey}`, "openai-beta.realtime-v1"]
       );
       realtimeWsRef.current = ws;

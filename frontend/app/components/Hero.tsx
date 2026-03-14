@@ -4,8 +4,37 @@ import { useRef } from "react";
 import { m, useScroll, useTransform, useMotionValue, useSpring } from "framer-motion";
 import { ChevronDown, Dumbbell, Apple, Flame, Activity } from "lucide-react";
 import ReactiveOrb from "./ReactiveOrb";
+import MagneticButton from "./MagneticButton";
+import ScrollHighlight from "./ScrollHighlight";
 
-export default function Hero() {
+/* ── Animated heading line ── */
+function AnimatedLine({
+  text,
+  className,
+  delay = 0,
+  gradient,
+  ready = true,
+}: {
+  text: string;
+  className?: string;
+  delay?: number;
+  gradient: string;
+  ready?: boolean;
+}) {
+  return (
+    <m.span
+      initial={{ opacity: 0, y: 50, filter: "blur(10px)" }}
+      animate={ready ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 50, filter: "blur(10px)" }}
+      transition={{ duration: 0.8, delay, ease: [0.16, 1, 0.3, 1] }}
+      className={`inline-block gradient-text-animate ${className ?? ""}`}
+      style={{ backgroundImage: gradient }}
+    >
+      {text}
+    </m.span>
+  );
+}
+
+export default function Hero({ ready = false }: { ready?: boolean }) {
   const sectionRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -41,10 +70,10 @@ export default function Hero() {
       <div className="absolute inset-0 aurora-bg pointer-events-none" />
 
       {/* Layered depth gradients */}
-      <m.div style={{ y: orbY }} className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[15%] left-[20%] w-[600px] h-[600px] rounded-full bg-orange-500/[0.05] blur-[180px]" />
-        <div className="absolute bottom-[20%] right-[15%] w-[500px] h-[500px] rounded-full bg-violet-500/[0.04] blur-[180px]" />
-        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-white/[0.02] blur-[100px]" />
+      <m.div style={{ y: orbY, willChange: "transform" }} className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[15%] left-[20%] w-[600px] h-[600px] rounded-full bg-orange-500/[0.05] blur-[80px]" />
+        <div className="absolute bottom-[20%] right-[15%] w-[500px] h-[500px] rounded-full bg-violet-500/[0.04] blur-[80px]" />
+        <div className="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-white/[0.02] blur-[60px]" />
       </m.div>
 
       {/* Hero orb — mouse-reactive */}
@@ -54,7 +83,7 @@ export default function Hero() {
       >
         <m.div
           initial={{ opacity: 0, scale: 0.3 }}
-          animate={{ opacity: 1, scale: 1 }}
+          animate={ready ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.3 }}
           transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] as const }}
         >
           <ReactiveOrb color="#a78bfa" isActive={false} size={360} />
@@ -62,7 +91,7 @@ export default function Hero() {
       </m.div>
 
       {/* ── Floating fitness photos — glassy, floating ── */}
-      <m.div
+      {ready && <m.div
         style={{ y: orbY, opacity: heroOpacity }}
         className="absolute inset-0 hidden lg:block"
       >
@@ -175,73 +204,68 @@ export default function Hero() {
             <span className="text-[11px] text-white/80 font-medium">Form tracking</span>
           </div>
         </m.div>
-      </m.div>
+      </m.div>}
 
       {/* Content */}
-      <m.div style={{ y: textY, scale: heroScale, opacity: heroOpacity }} className="relative z-10 text-center max-w-3xl mx-auto px-6 pt-16">
-        {/* Heading — cinematic entrance */}
+      <m.div style={{ y: textY, scale: heroScale, opacity: heroOpacity, willChange: "transform, opacity" }} className="relative z-10 text-center max-w-3xl mx-auto px-6 pt-16">
+        {/* Heading — letter-by-letter cinematic entrance */}
         <h1 className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
-          <m.span
-            initial={{ opacity: 0, y: 50, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] as const }}
-            className="inline-block"
-          >
-            Voice AI Agents
-          </m.span>
+          <AnimatedLine
+            text="Voice AI Agents"
+            delay={0.2}
+            gradient="linear-gradient(90deg, #fff, #c4b5fd, #fff, #c4b5fd, #fff)"
+            ready={ready}
+          />
           <br />
-          <m.span
-            initial={{ opacity: 0, y: 50, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            transition={{ duration: 0.8, delay: 0.55, ease: [0.16, 1, 0.3, 1] as const }}
-            className="inline-block text-orange-400"
-          >
-            for Fitness Brands
-          </m.span>
+          <AnimatedLine
+            text="for Fitness Brands"
+            delay={0.5}
+            gradient="linear-gradient(90deg, #fb923c, #fbbf24, #fb923c, #fbbf24, #fb923c)"
+            ready={ready}
+          />
         </h1>
 
-        {/* Subtitle */}
-        <m.p
+        {/* Subtitle — word-by-word scroll highlight */}
+        <m.div
           initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.85, ease: [0.16, 1, 0.3, 1] as const }}
-          className="text-lg text-white/60 max-w-xl mx-auto mb-12 leading-relaxed"
+          animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+          transition={{ duration: 0.7, delay: 1.2, ease: [0.16, 1, 0.3, 1] as const }}
         >
-          Deploy Mika for nutrition coaching and Bheema for real-time
-          personal training — white-label voice AI that keeps your members engaged.
-        </m.p>
+          <ScrollHighlight
+            text="Your AI nutrition coach and personal trainer, ready to talk."
+            className="text-lg text-white max-w-xl mx-auto mb-12 leading-relaxed"
+          />
+        </m.div>
 
-        {/* CTAs */}
+        {/* CTAs — magnetic buttons */}
         <m.div
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.1, duration: 0.6 }}
+          animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          transition={{ delay: 1.4, duration: 0.6 }}
           className="flex items-center justify-center gap-4 mb-8"
         >
-          <m.a
+          <MagneticButton
             href="#agents"
-            whileHover={{ scale: 1.04, y: -2 }}
-            whileTap={{ scale: 0.97 }}
-            className="px-8 py-3 rounded-full bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-colors duration-200 shimmer-hover"
+            strength={0.3}
+            className="px-8 py-3 rounded-full bg-orange-500 text-white text-sm font-semibold hover:bg-orange-400 transition-colors duration-200 shimmer-hover inline-block"
           >
             Try the Agents
-          </m.a>
-          <m.a
+          </MagneticButton>
+          <MagneticButton
             href="#features"
-            whileHover={{ scale: 1.04, y: -2, borderColor: "rgba(255,255,255,0.25)" }}
-            whileTap={{ scale: 0.97 }}
-            className="px-8 py-3 rounded-full border border-white/15 text-sm text-white/60 hover:text-white backdrop-blur-sm transition-all duration-200"
+            strength={0.3}
+            className="px-8 py-3 rounded-full border border-white/15 text-sm text-white/60 hover:text-white backdrop-blur-sm transition-all duration-200 inline-block"
           >
             See How It Works
-          </m.a>
+          </MagneticButton>
         </m.div>
 
         {/* Scroll indicator */}
         <m.a
           href="#features"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
+          animate={ready ? { opacity: 1 } : { opacity: 0 }}
+          transition={{ delay: 1.8 }}
           className="inline-flex flex-col items-center gap-1 text-xs text-white/20 hover:text-white/40 transition-colors cursor-pointer"
         >
           <m.div

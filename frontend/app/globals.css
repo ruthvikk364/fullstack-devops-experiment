@@ -31,6 +31,22 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0); }
 }
 
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.gradient-text-animate {
+  background-size: 300% 100%;
+  animation: gradient-shift 6s ease infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  will-change: background-position;
+}
+
 @keyframes aurora {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -61,6 +77,7 @@ body {
   );
   background-size: 400% 400%;
   animation: aurora 15s ease-in-out infinite;
+  will-change: background-position;
 }
 
 /* ── Glassy card effect ── */

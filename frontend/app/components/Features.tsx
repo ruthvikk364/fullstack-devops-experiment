@@ -10,6 +10,7 @@ import {
   BarChart3,
   Puzzle,
 } from "lucide-react";
+import SpotlightCard from "./SpotlightCard";
 
 const features = [
   {
@@ -20,6 +21,7 @@ const features = [
     accent: "text-orange-400",
     accentBorder: "group-hover:border-orange-400/30",
     iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+    spotlightColor: "rgba(251, 146, 60, 0.08)",
   },
   {
     icon: Users,
@@ -29,6 +31,7 @@ const features = [
     accent: "text-violet-400",
     accentBorder: "group-hover:border-violet-400/30",
     iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
+    spotlightColor: "rgba(167, 139, 250, 0.08)",
   },
   {
     icon: Zap,
@@ -38,6 +41,7 @@ const features = [
     accent: "text-orange-400",
     accentBorder: "group-hover:border-orange-400/30",
     iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+    spotlightColor: "rgba(251, 146, 60, 0.08)",
   },
   {
     icon: Puzzle,
@@ -47,6 +51,7 @@ const features = [
     accent: "text-violet-400",
     accentBorder: "group-hover:border-violet-400/30",
     iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
+    spotlightColor: "rgba(167, 139, 250, 0.08)",
   },
   {
     icon: BarChart3,
@@ -56,6 +61,7 @@ const features = [
     accent: "text-orange-400",
     accentBorder: "group-hover:border-orange-400/30",
     iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+    spotlightColor: "rgba(251, 146, 60, 0.08)",
   },
   {
     icon: Shield,
@@ -65,6 +71,7 @@ const features = [
     accent: "text-violet-400",
     accentBorder: "group-hover:border-violet-400/30",
     iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
+    spotlightColor: "rgba(167, 139, 250, 0.08)",
   },
 ];
 
@@ -75,6 +82,15 @@ export default function Features() {
     offset: ["start end", "start 0.3"],
   });
   const lineScaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
+
+  // Parallax: cards at different rows move at slightly different speeds
+  const { scrollYProgress: parallaxProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "end start"],
+  });
+
+  const row1Y = useTransform(parallaxProgress, [0, 1], [30, -15]);
+  const row2Y = useTransform(parallaxProgress, [0, 1], [50, -25]);
 
   return (
     <section
@@ -115,31 +131,38 @@ export default function Features() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {features.map((feature, idx) => {
             const Icon = feature.icon;
+            const row = Math.floor(idx / 3);
+            const yOffset = row === 0 ? row1Y : row2Y;
+
             return (
               <m.div
                 key={feature.title}
                 initial={{ opacity: 0, y: 40, filter: "blur(6px)" }}
                 whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-60px" }}
-                whileHover={{ y: -6, transition: { duration: 0.3, ease: [0.25, 1, 0.5, 1] } }}
                 transition={{
                   duration: 0.6,
                   delay: idx * 0.1,
                   ease: [0.16, 1, 0.3, 1] as const,
                 }}
-                className={`group rounded-2xl border border-white/[0.06] ${feature.accentBorder} glass-card shimmer-hover p-6 transition-all duration-300 cursor-default`}
+                style={{ y: yOffset }}
               >
-                <div
-                  className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${feature.iconBg} ${feature.accent} mb-4 group-hover:scale-110 group-hover:rotate-[-6deg] transition-all duration-300`}
+                <SpotlightCard
+                  className={`group rounded-2xl border border-white/[0.06] ${feature.accentBorder} glass-card shimmer-hover p-6 transition-all duration-300 cursor-default h-full`}
+                  spotlightColor={feature.spotlightColor}
                 >
-                  <Icon className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-semibold mb-2 group-hover:text-white transition-colors duration-300">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/55 transition-colors duration-300">
-                  {feature.description}
-                </p>
+                  <div
+                    className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${feature.iconBg} ${feature.accent} mb-4 group-hover:scale-110 group-hover:rotate-[-6deg] transition-all duration-300`}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-base font-semibold mb-2 group-hover:text-white transition-colors duration-300">
+                    {feature.title}
+                  </h3>
+                  <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/55 transition-colors duration-300">
+                    {feature.description}
+                  </p>
+                </SpotlightCard>
               </m.div>
             );
           })}

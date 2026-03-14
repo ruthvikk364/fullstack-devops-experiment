@@ -128,7 +128,7 @@ async def get_profile(user_id: str, db: AsyncSession = Depends(get_db)):
         .where(BMIRecord.user_id == user_id)
         .order_by(BMIRecord.created_at.desc())
     )
-    bmi = bmi_result.scalar_one_or_none()
+    bmi = bmi_result.scalars().first()
 
     # Construct PDF filename
     pdf_filename = None

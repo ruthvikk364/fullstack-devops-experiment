@@ -7,8 +7,8 @@ import ReactiveOrb from "./ReactiveOrb";
 import MagneticButton from "./MagneticButton";
 import ScrollHighlight from "./ScrollHighlight";
 
-/* ── Letter-by-letter stagger for heading ── */
-function AnimatedLetters({
+/* ── Animated heading line ── */
+function AnimatedLine({
   text,
   className,
   delay = 0,
@@ -23,32 +23,13 @@ function AnimatedLetters({
 }) {
   return (
     <m.span
-      initial="hidden"
-      animate={ready ? "visible" : "hidden"}
-      className={`gradient-text-animate ${className ?? ""}`}
+      initial={{ opacity: 0, y: 50, filter: "blur(10px)" }}
+      animate={ready ? { opacity: 1, y: 0, filter: "blur(0px)" } : { opacity: 0, y: 50, filter: "blur(10px)" }}
+      transition={{ duration: 0.8, delay, ease: [0.16, 1, 0.3, 1] }}
+      className={`inline-block gradient-text-animate ${className ?? ""}`}
       style={{ backgroundImage: gradient }}
     >
-      {text.split("").map((char, i) => (
-        <m.span
-          key={i}
-          variants={{
-            hidden: { opacity: 0, y: 40 },
-            visible: {
-              opacity: 1,
-              y: 0,
-              transition: {
-                duration: 0.5,
-                delay: delay + i * 0.03,
-                ease: [0.16, 1, 0.3, 1],
-              },
-            },
-          }}
-          className="inline-block"
-          style={char === " " ? { width: "0.3em" } : undefined}
-        >
-          {char === " " ? "\u00A0" : char}
-        </m.span>
-      ))}
+      {text}
     </m.span>
   );
 }
@@ -229,16 +210,16 @@ export default function Hero({ ready = false }: { ready?: boolean }) {
       <m.div style={{ y: textY, scale: heroScale, opacity: heroOpacity, willChange: "transform, opacity" }} className="relative z-10 text-center max-w-3xl mx-auto px-6 pt-16">
         {/* Heading — letter-by-letter cinematic entrance */}
         <h1 className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
-          <AnimatedLetters
+          <AnimatedLine
             text="Voice AI Agents"
             delay={0.2}
             gradient="linear-gradient(90deg, #fff, #c4b5fd, #fff, #c4b5fd, #fff)"
             ready={ready}
           />
           <br />
-          <AnimatedLetters
+          <AnimatedLine
             text="for Fitness Brands"
-            delay={0.65}
+            delay={0.5}
             gradient="linear-gradient(90deg, #fb923c, #fbbf24, #fb923c, #fbbf24, #fb923c)"
             ready={ready}
           />

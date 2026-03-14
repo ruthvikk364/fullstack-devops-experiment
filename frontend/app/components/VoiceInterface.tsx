@@ -826,7 +826,7 @@ export default function VoiceInterface({
             const t = (data.transcript || "").trim();
             if (!t || t.length < 2) break;
 
-            // ── Transcript-level hallucination filter (iSureTech approach) ──
+            // ── Transcript-level hallucination filter ──
 
             // 1. Non-Latin chars > 30% = Whisper hallucinating other languages
             const nonAscii = t.replace(/[a-zA-Z0-9\s.,!?'"@\-_:;()]/g, "");
@@ -835,18 +835,29 @@ export default function VoiceInterface({
             // 2. Thinking sounds — always ignore
             if (/^(hmm|um|uh|ah|mhm|er|oh|hm|mm|uh-huh|okay|ok)\.?$/i.test(t)) break;
 
-            // 3. Brief speech (< 800ms) noise phrases
+            // 3. Phantom words — Whisper generates these from silence/noise at ANY duration
+            if (/^(bye|bye-bye|bye bye|goodbye|good bye|thank you|thanks|thank you so much|peace|see you|see ya|take care|farewell|hello|hey|hi|yes|no|yeah|right|sure|yep|the|a|an|it|I|so|and|but|well|wow|oh wow|you|good|great|nice|cool|alright|absolutely|definitely|exactly|totally|of course)\.?$/i.test(t)) {
+              console.log("[Hallucination filter] Blocked phantom word:", t);
+              break;
+            }
+
+            // 4. Brief noise (< 1200ms) — any short utterance under 4 words is suspect
             const speechDuration = Date.now() - speechStartRef.current;
-            if (speechDuration < 800 && /^(bye|the|thank you|thanks|peace|see you|goodbye|hello|hey|hi|yes|no|yeah|right|sure|yep)\.?$/i.test(t)) break;
+            const wordCount = t.split(/\s+/).length;
+            if (speechDuration < 1200 && wordCount <= 3) {
+              console.log("[Hallucination filter] Blocked brief noise:", t, `(${speechDuration}ms, ${wordCount} words)`);
+              break;
+            }
 
-            // 4. Whisper hallucination patterns (YouTube outros, phantom phrases)
-            if (/thank you for watching|subscribe|like and subscribe|peace be with|shabbat shalom|see you soon|take your time|see you next|thanks for listening|thank you so much/i.test(t)) break;
+            // 5. Whisper hallucination patterns (YouTube outros, phantom phrases)
+            if (/thank you for watching|subscribe|like and subscribe|peace be with|shabbat shalom|see you soon|take your time|see you next|thanks for listening|thank you so much|you're welcome|have a good|have a great|have a nice|i'll see you|until next time|bye for now|goodbye everyone|thanks everyone|good night|good morning|good afternoon/i.test(t)) break;
 
-            // 5. Repetitive filler (e.g. "th th th th")
+            // 6. Repetitive filler (e.g. "th th th th")
             const words = t.split(/\s+/);
             if (words.length >= 3 && new Set(words).size === 1) break;
 
             // ── Valid transcript — process it ──
+            console.log("[Mika] Valid user speech:", t, `(${speechDuration}ms)`);
             lastUserText = t;
             setTranscript("");
             setMessages((prev) => {
@@ -1146,12 +1157,26 @@ export default function VoiceInterface({
             const nonAscii = t.replace(/[a-zA-Z0-9\s.,!?'"@\-_:;()]/g, "");
             if (t.length > 0 && nonAscii.length / t.length > 0.3) break;
             if (/^(hmm|um|uh|ah|mhm|er|oh|hm|mm|uh-huh|okay|ok)\.?$/i.test(t)) break;
+
+            // Phantom words — always block
+            if (/^(bye|bye-bye|bye bye|goodbye|good bye|thank you|thanks|thank you so much|peace|see you|see ya|take care|farewell|hello|hey|hi|yes|no|yeah|right|sure|yep|the|a|an|it|I|so|and|but|well|wow|oh wow|you|good|great|nice|cool|alright|absolutely|definitely|exactly|totally|of course)\.?$/i.test(t)) {
+              console.log("[Hallucination filter] Blocked phantom word:", t);
+              break;
+            }
+
+            // Brief noise (< 1200ms, <= 3 words)
             const speechDuration = Date.now() - speechStartRef.current;
-            if (speechDuration < 800 && /^(bye|the|thank you|thanks|peace|see you|goodbye|hello|hey|hi|yes|no|yeah|right|sure|yep)\.?$/i.test(t)) break;
-            if (/thank you for watching|subscribe|like and subscribe|peace be with|shabbat shalom|see you soon|take your time|see you next|thanks for listening|thank you so much/i.test(t)) break;
+            const wordCount = t.split(/\s+/).length;
+            if (speechDuration < 1200 && wordCount <= 3) {
+              console.log("[Hallucination filter] Blocked brief noise:", t, `(${speechDuration}ms)`);
+              break;
+            }
+
+            if (/thank you for watching|subscribe|like and subscribe|peace be with|shabbat shalom|see you soon|take your time|see you next|thanks for listening|thank you so much|you're welcome|have a good|have a great|have a nice|i'll see you|until next time|bye for now|goodbye everyone|thanks everyone|good night|good morning|good afternoon/i.test(t)) break;
             const words = t.split(/\s+/);
             if (words.length >= 3 && new Set(words).size === 1) break;
 
+            console.log("[Bheema] Valid user speech:", t, `(${speechDuration}ms)`);
             setTranscript("");
             setMessages((prev) => [...prev, { role: "user" as const, content: t }]);
             break;

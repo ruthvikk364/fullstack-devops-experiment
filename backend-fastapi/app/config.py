@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # ── OpenAI ──
     OPENAI_API_KEY: str = ""
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-4.1"
 
     # ── Database ──
     DATABASE_URL: str = "sqlite+aiosqlite:///./trainfree.db"

@@ -1,156 +1,113 @@
 "use client";
 
 import { m } from "framer-motion";
-import { Mic, MessageCircle, Headphones } from "lucide-react";
+import { Mic, Camera, FileText, MessageCircle } from "lucide-react";
 
-const images = [
+const capabilities = [
   {
-    src: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=600&h=400&fit=crop&q=80",
-    alt: "Person training solo with focus",
-    caption: "Train on your terms",
+    icon: MessageCircle,
+    label: "Mika",
+    title: "Onboarding & Nutrition",
+    description:
+      "Collects fitness profiles through natural conversation, generates personalized meal plans with macro targets, and emails PDF workout guides — all hands-free.",
+    accent: "text-violet-400",
+    borderHover: "group-hover:border-violet-400/30",
+    iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
   },
   {
-    src: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=600&h=400&fit=crop&q=80",
-    alt: "Healthy meal prep and nutrition",
-    caption: "Nutrition, simplified",
+    icon: Mic,
+    label: "Bheema",
+    title: "Real-Time Voice Coaching",
+    description:
+      "Delivers live workout instructions, counts reps by voice, adapts intensity on the fly, and motivates members through every set — like a trainer in their ear.",
+    accent: "text-orange-400",
+    borderHover: "group-hover:border-orange-400/30",
+    iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
   },
   {
-    src: "https://images.unsplash.com/photo-1576678927484-cc907957088c?w=600&h=400&fit=crop&q=80",
-    alt: "Woman working out with earbuds",
-    caption: "AI coaching in your ear",
+    icon: Camera,
+    label: "Bheema",
+    title: "Camera-Based Form Tracking",
+    description:
+      "Tracks body position in real time using the device camera, counts reps automatically, and provides instant form corrections — no wearable needed.",
+    accent: "text-orange-400",
+    borderHover: "group-hover:border-orange-400/30",
+    iconBg: "bg-orange-400/10 group-hover:bg-orange-400/15",
+  },
+  {
+    icon: FileText,
+    label: "Mika",
+    title: "Personalized Plan Generation",
+    description:
+      "After onboarding, auto-generates a custom PDF with workout schedules, diet plans, BMI analysis, and calorie targets — sent directly to the member's email.",
+    accent: "text-violet-400",
+    borderHover: "group-hover:border-violet-400/30",
+    iconBg: "bg-violet-400/10 group-hover:bg-violet-400/15",
   },
 ];
 
 export default function Showcase() {
   return (
     <section className="py-28 px-6 bg-[#0a0a0a] relative overflow-hidden">
-      {/* Background accent */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-violet-500/[0.03] blur-[150px] pointer-events-none" />
+      {/* Subtle aurora wash behind section */}
+      <div className="absolute inset-0 aurora-bg opacity-50 pointer-events-none" />
 
       <div className="max-w-6xl mx-auto relative z-10">
-        {/* Header */}
         <div className="text-center mb-16">
-          <m.span
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as const }}
-            className="inline-block px-3 py-1 text-[10px] font-medium tracking-widest uppercase text-white/30 border border-white/10 rounded-full mb-4"
-          >
-            How It Works
-          </m.span>
           <m.h2
-            initial={{ opacity: 0, y: 30, filter: "blur(6px)" }}
+            initial={{ opacity: 0, y: 40, filter: "blur(8px)" }}
             whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{
-              duration: 0.6,
-              delay: 0.1,
-              ease: [0.16, 1, 0.3, 1] as const,
-            }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
             className="text-4xl sm:text-5xl font-bold tracking-tight mb-4"
           >
-            Your Gym. Your Voice. Your AI.
+            What the Agents Do
           </m.h2>
           <m.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
-            transition={{
-              duration: 0.5,
-              delay: 0.2,
-              ease: [0.16, 1, 0.3, 1] as const,
-            }}
-            className="text-white/35 max-w-lg mx-auto leading-relaxed"
+            transition={{ duration: 0.5, delay: 0.15, ease: [0.16, 1, 0.3, 1] as const }}
+            className="text-white/50 max-w-lg mx-auto leading-relaxed"
           >
-            No personal trainer hovering. No generic plans. Just AI that listens,
-            learns, and coaches in real time.
+            Each agent handles a distinct part of the fitness journey —
+            from first conversation to mid-workout form corrections.
           </m.p>
         </div>
 
-        {/* Image grid */}
-        <div className="grid md:grid-cols-3 gap-6 mb-20">
-          {images.map((img, idx) => (
-            <m.div
-              key={img.alt}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
-              transition={{
-                duration: 0.6,
-                delay: idx * 0.12,
-                ease: [0.16, 1, 0.3, 1] as const,
-              }}
-              className="group relative rounded-2xl overflow-hidden border border-white/5 hover:border-white/10 transition-colors duration-300"
-            >
-              <div className="aspect-[3/2] overflow-hidden">
-                <img
-                  src={img.src}
-                  alt={img.alt}
-                  loading="lazy"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                />
-                {/* Dark overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-transparent" />
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <p className="text-sm font-medium text-white/80">
-                  {img.caption}
-                </p>
-              </div>
-            </m.div>
-          ))}
-        </div>
-
-        {/* Steps */}
-        <div className="grid md:grid-cols-3 gap-8">
-          {[
-            {
-              step: "01",
-              icon: Headphones,
-              title: "Put in your earbuds",
-              desc: "Open TrainFree and choose your agent — Mika for nutrition or Bheema for training.",
-              accent: "text-violet-400",
-            },
-            {
-              step: "02",
-              icon: Mic,
-              title: "Speak naturally",
-              desc: "Tell Bheema your goals or ask Mika about your diet. No scripts, just conversation.",
-              accent: "text-orange-400",
-            },
-            {
-              step: "03",
-              icon: MessageCircle,
-              title: "Get instant guidance",
-              desc: "Receive personalized workout plans, form tips, meal ideas, and real-time coaching.",
-              accent: "text-violet-400",
-            },
-          ].map((item, idx) => {
-            const Icon = item.icon;
+        <div className="grid md:grid-cols-2 gap-5">
+          {capabilities.map((cap, idx) => {
+            const Icon = cap.icon;
             return (
               <m.div
-                key={item.step}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                key={cap.title}
+                initial={{ opacity: 0, y: 40, filter: "blur(6px)" }}
+                whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, margin: "-60px" }}
+                whileHover={{ y: -5, transition: { duration: 0.3, ease: [0.25, 1, 0.5, 1] } }}
                 transition={{
-                  duration: 0.5,
+                  duration: 0.6,
                   delay: idx * 0.1,
                   ease: [0.16, 1, 0.3, 1] as const,
                 }}
-                className="text-center"
+                className={`group rounded-2xl border border-white/[0.06] ${cap.borderHover} glass-card shimmer-hover p-6 transition-all duration-300 cursor-default`}
               >
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/5 mb-5">
-                  <Icon className={`w-6 h-6 ${item.accent}`} />
+                <div className="flex items-start gap-4">
+                  <div className={`shrink-0 w-10 h-10 rounded-xl ${cap.iconBg} flex items-center justify-center group-hover:scale-110 group-hover:rotate-[-6deg] transition-all duration-300`}>
+                    <Icon className={`w-5 h-5 ${cap.accent}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="text-base font-semibold group-hover:text-white transition-colors duration-300">{cap.title}</h3>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${cap.iconBg} ${cap.accent} group-hover:scale-105 transition-transform duration-200`}>
+                        {cap.label}
+                      </span>
+                    </div>
+                    <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/55 transition-colors duration-300">
+                      {cap.description}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-white/20 font-mono mb-2">
-                  {item.step}
-                </p>
-                <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-                <p className="text-sm text-white/35 leading-relaxed max-w-xs mx-auto">
-                  {item.desc}
-                </p>
               </m.div>
             );
           })}

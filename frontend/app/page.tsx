@@ -9,14 +9,12 @@ import Showcase from "./components/Showcase";
 import AgentCards from "./components/AgentCards";
 import VoiceInterface from "./components/VoiceInterface";
 import Footer from "./components/Footer";
-import Particles from "./components/Particles";
 
 export default function Home() {
   const [activeAgent, setActiveAgent] = useState<"mika" | "bheema" | null>(
     null
   );
 
-  // Scroll progress bar
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
@@ -25,13 +23,12 @@ export default function Home() {
   });
 
   return (
-    <div className="bg-[#0a0a0a] min-h-screen noise-bg">
-      {/* Scroll progress indicator */}
+    <div className="bg-[#0a0a0a] min-h-screen">
+      {/* Scroll progress — thin, solid, no glow */}
       <m.div
         style={{ scaleX, transformOrigin: "left" }}
-        className="fixed top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-orange-400 z-[60]"
+        className="fixed top-0 left-0 right-0 h-[2px] bg-orange-400 z-[60]"
       />
-      <Particles />
       <Navbar />
       <main className="relative z-10">
         <Hero />

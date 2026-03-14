@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef } from "react";
 import Lenis from "lenis";
 import { LazyMotion, domAnimation } from "framer-motion";
+import AuthProvider from "./components/AuthProvider";
 
 const LenisContext = createContext<Lenis | null>(null);
 
@@ -35,7 +36,7 @@ function SmoothScroll({ children }: { children: React.ReactNode }) {
       if (!href || href === "#") return;
       e.preventDefault();
       const target = document.querySelector(href);
-      if (target) lenis.scrollTo(target as HTMLElement, { offset: -80 });
+      if (target) lenis.scrollTo(target as HTMLElement, { offset: -20 });
     };
 
     document.addEventListener("click", handleClick);
@@ -54,8 +55,10 @@ function SmoothScroll({ children }: { children: React.ReactNode }) {
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <LazyMotion features={domAnimation}>
-      <SmoothScroll>{children}</SmoothScroll>
-    </LazyMotion>
+    <AuthProvider>
+      <LazyMotion features={domAnimation}>
+        <SmoothScroll>{children}</SmoothScroll>
+      </LazyMotion>
+    </AuthProvider>
   );
 }

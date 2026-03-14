@@ -95,9 +95,15 @@ function isNoiseTranscript(text: string, durationMs: number): boolean {
 }
 
 const overlayVariants = {
-  hidden: { opacity: 0, y: "3%", scale: 0.98 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] as const } },
-  exit: { opacity: 0, y: "3%", scale: 0.98, transition: { duration: 0.3, ease: [0.4, 0, 1, 1] as const } },
+  hidden: { opacity: 0, scale: 0.92, filter: "blur(8px)" },
+  visible: {
+    opacity: 1, scale: 1, filter: "blur(0px)",
+    transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const },
+  },
+  exit: {
+    opacity: 0, scale: 0.95, filter: "blur(4px)",
+    transition: { duration: 0.35, ease: [0.4, 0, 1, 1] as const },
+  },
 };
 
 // ─── Profile Cards ───────────────────────────────────────────────
@@ -713,7 +719,7 @@ export default function VoiceInterface({ agent, onClose }: VoiceInterfaceProps) 
           className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col" onWheel={e => e.stopPropagation()}>
 
           {/* Header */}
-          <m.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3 }}
+          <m.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4, ease: [0.16, 1, 0.3, 1] as const }}
             className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-4">
               <m.button whileHover={{ scale: 1.1, x: -2 }} whileTap={{ scale: 0.9 }} onClick={handleClose}

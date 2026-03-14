@@ -452,18 +452,34 @@ export default function VoiceInterface({
         }
       } else {
         console.error("[Mika] Profile fetch failed:", resp.status);
-        // Retry on failure too
+        if (!profileData) {
+          try {
+            const stored = localStorage.getItem("trainfree_profile");
+            if (stored) { setProfileData(JSON.parse(stored)); console.log("[Mika] Using localStorage fallback"); }
+          } catch {}
+        }
         if (retries < 5) {
           setTimeout(() => fetchProfile(userId, retries + 1), 3000);
         }
       }
     } catch (e) {
       console.error("[Mika] Profile fetch error:", e);
+      // Fallback: try loading from localStorage if API is unreachable
+      if (!profileData) {
+        try {
+          const stored = localStorage.getItem("trainfree_profile");
+          if (stored) {
+            const data = JSON.parse(stored);
+            console.log("[Mika] Using localStorage fallback for profile");
+            setProfileData(data);
+          }
+        } catch {}
+      }
       if (retries < 5) {
         setTimeout(() => fetchProfile(userId, retries + 1), 3000);
       }
     }
-  }, []);
+  }, [profileData]);
 
   // ─── Init on agent change ─────────────────────────────────────
   useEffect(() => {

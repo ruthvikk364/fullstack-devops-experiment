@@ -218,7 +218,7 @@ export default function Hero({ ready = false }: { ready?: boolean }) {
           />
           <br />
           <AnimatedLine
-            text="for Fitness Brands"
+            text="for Personal Fitness"
             delay={0.5}
             gradient="linear-gradient(90deg, #fb923c, #fbbf24, #fb923c, #fbbf24, #fb923c)"
             ready={ready}

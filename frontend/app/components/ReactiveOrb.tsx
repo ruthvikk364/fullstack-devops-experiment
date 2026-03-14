@@ -26,6 +26,10 @@ export default function ReactiveOrb({
   const animRef = useRef<number>(0);
   const intensityRef = useRef(0);
 
+  // Render on a larger canvas so glow doesn't clip at edges
+  const pad = Math.round(size * 0.7);
+  const canvasSize = size + pad * 2;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -33,8 +37,8 @@ export default function ReactiveOrb({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = canvasSize * dpr;
+    canvas.height = canvasSize * dpr;
     ctx.scale(dpr, dpr);
 
     const [r, g, b] = hexToRgb(color);
@@ -42,10 +46,10 @@ export default function ReactiveOrb({
 
     const loop = (now: number) => {
       const t = (now - startTime) / 1000;
-      ctx.clearRect(0, 0, size, size);
+      ctx.clearRect(0, 0, canvasSize, canvasSize);
 
-      const cx = size / 2;
-      const cy = size / 2;
+      const cx = canvasSize / 2;
+      const cy = canvasSize / 2;
       const baseRadius = size * 0.2;
 
       // Smooth intensity ramp
@@ -153,12 +157,12 @@ export default function ReactiveOrb({
 
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [color, isActive, size]);
+  }, [color, isActive, size, canvasSize]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: size, height: size }}
+      style={{ width: canvasSize, height: canvasSize, margin: -pad, display: "block" }}
       className="pointer-events-none"
     />
   );

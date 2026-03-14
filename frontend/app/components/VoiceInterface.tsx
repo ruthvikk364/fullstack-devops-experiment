@@ -2,9 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { m, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Mic, MicOff, Send, Volume2 } from "lucide-react";
+import {
+  ArrowLeft, Mic, MicOff, Send, Volume2, Camera, CameraOff,
+  MessageSquare, Download, User, Activity, Mail,
+} from "lucide-react";
 import ReactiveOrb from "./ReactiveOrb";
 import Waveform from "./Waveform";
+
+const API_BASE = process.env.NEXT_PUBLIC_FASTAPI_API || "http://localhost:8080/api";
+const WS_BASE = API_BASE.replace(/^http/, "ws").replace(/\/api$/, "/api");
 
 interface VoiceInterfaceProps {
   agent: "mika" | "bheema" | null;
@@ -12,479 +18,915 @@ interface VoiceInterfaceProps {
 }
 
 interface ChatMessage {
-  role: "user" | "assistant";
+  id: string;
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
-const agentConfig = {
-  mika: {
-    name: "Mika",
-    color: "#a78bfa",
-    greeting:
-      "Hey! I'm Mika, your nutrition assistant. Ask me anything about meals, macros, or diet plans.",
-    mockResponses: [
-      "Great question! For muscle building, aim for about 1.6-2.2g of protein per kg of bodyweight daily. Chicken, fish, eggs, and legumes are excellent sources.",
-      "I'd suggest a balanced meal plan with 40% carbs, 30% protein, and 30% healthy fats. Want me to break that down further?",
-      "Hydration is key! Aim for at least 3 liters of water daily, more if you're training intensely.",
-    ],
-  },
-  bheema: {
-    name: "Bheema",
-    color: "#fb923c",
-    greeting:
-      "I'm Bheema, your personal trainer. Press the mic and tell me your fitness goals.",
-    mockResponses: [
-      "Based on your goals, I'd recommend a push-pull-legs split, training 4 days a week. Let me design the first week for you.",
-      "Great form tip: when squatting, focus on pushing your knees out over your toes and keeping your chest up. This protects your lower back.",
-      "For your recovery, I recommend 48 hours between training the same muscle group. Active recovery like walking or light yoga can help.",
-    ],
-  },
-};
+interface ProfileData {
+  user_id: string;
+  name: string;
+  email: string;
+  weight_kg: number;
+  height_cm: number;
+  target_weight_kg: number;
+  fitness_goal: string;
+  diet_preference: string;
+  bmi: {
+    bmi_value: number;
+    category: string;
+    daily_calories: number;
+    daily_protein_g: number;
+    daily_carbs_g: number;
+    daily_fat_g: number;
+    strategy: string;
+  } | null;
+  pdf_available: boolean;
+}
+
+// ─── Audio helpers ───────────────────────────────────────────────
+function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(float32.length * 2);
+  const view = new DataView(buffer);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buffer;
+}
+
+function base64EncodeAudio(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64DecodeAudio(base64: string): Int16Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Int16Array(bytes.buffer);
+}
+
+// ─── Whisper hallucination filter ────────────────────────────────
+const THINKING_SOUNDS = new Set([
+  "hmm","hmmm","um","umm","ummm","uh","uhh","ah","ahh","oh","ohh",
+  "huh","mhm","mhmm","mm","mmm","mmmm","er","err","erm",
+]);
+const NOISE_PHRASES = new Set([
+  "bye","bye.","bye-bye","bye bye","the","a","i","you","hey","so","and",
+  "thank you","thanks","ok","okay","thank you for watching","thanks for watching",
+]);
+const HALLUCINATION_PATTERNS = [
+  /^(thank(s| you)( for (watching|listening))?)\.?$/i,
+  /subscri(be|ption)/i, /see you (next|in the)/i,
+];
+
+function isNoiseTranscript(text: string, durationMs: number): boolean {
+  if (!text || text.length < 2) return true;
+  const nonLatin = (text.replace(/[\x00-\x7F]/g, "").length) / text.length;
+  if (nonLatin > 0.3) return true;
+  const lower = text.toLowerCase().replace(/[.,!?]+$/g, "");
+  if (THINKING_SOUNDS.has(lower)) return true;
+  if (durationMs < 800 && NOISE_PHRASES.has(lower)) return true;
+  if (HALLUCINATION_PATTERNS.some((p) => p.test(text))) return true;
+  return false;
+}
 
 const overlayVariants = {
   hidden: { opacity: 0, y: "3%", scale: 0.98 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] as const },
-  },
-  exit: {
-    opacity: 0,
-    y: "3%",
-    scale: 0.98,
-    transition: { duration: 0.3, ease: [0.4, 0, 1, 1] as const },
-  },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] as const } },
+  exit: { opacity: 0, y: "3%", scale: 0.98, transition: { duration: 0.3, ease: [0.4, 0, 1, 1] as const } },
 };
 
-export default function VoiceInterface({
-  agent,
-  onClose,
-}: VoiceInterfaceProps) {
+// ─── Profile Cards ───────────────────────────────────────────────
+function ProfileCards({ profile }: { profile: ProfileData }) {
+  return (
+    <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as const }}
+      className="max-w-2xl mx-auto mt-6 space-y-4"
+    >
+      <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center">
+            <User className="w-5 h-5 text-violet-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-semibold text-lg">{profile.name || "User"}</h3>
+            <p className="text-violet-300/60 text-xs">{profile.fitness_goal?.replace("_", " ") || "General fitness"}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Mail className="w-3.5 h-3.5 text-violet-400/50" />
+            <span className="text-white/60 truncate">{profile.email || "—"}</span>
+          </div>
+          <div className="text-white/60">Diet: <span className="text-white/80">{profile.diet_preference || "—"}</span></div>
+          <div className="text-white/60">Weight: <span className="text-white/80">{profile.weight_kg ? `${profile.weight_kg} kg` : "—"}</span></div>
+          <div className="text-white/60">Target: <span className="text-white/80">{profile.target_weight_kg ? `${profile.target_weight_kg} kg` : "—"}</span></div>
+        </div>
+      </div>
+      {profile.bmi && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+              <Activity className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">Health Analysis</h3>
+              <p className="text-emerald-300/60 text-xs">{profile.bmi.strategy}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-black/20 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-400">{profile.bmi.bmi_value.toFixed(1)}</p>
+              <p className="text-[10px] text-white/40 mt-1">BMI — {profile.bmi.category}</p>
+            </div>
+            <div className="bg-black/20 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-orange-400">{profile.bmi.daily_calories}</p>
+              <p className="text-[10px] text-white/40 mt-1">Daily Calories</p>
+            </div>
+            <div className="bg-black/20 rounded-xl p-3 text-center">
+              <p className="text-2xl font-bold text-blue-400">{profile.bmi.daily_protein_g}g</p>
+              <p className="text-[10px] text-white/40 mt-1">Protein</p>
+            </div>
+            <div className="bg-black/20 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-yellow-400">{profile.bmi.daily_carbs_g}g / {profile.bmi.daily_fat_g}g</p>
+              <p className="text-[10px] text-white/40 mt-1">Carbs / Fat</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {profile.pdf_available && (
+        <m.button
+          onClick={() => window.open(`${API_BASE}/onboarding/pdf/${profile.user_id}`, "_blank")}
+          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+          className="w-full bg-gradient-to-r from-violet-600/20 to-emerald-600/20 border border-violet-500/20 rounded-2xl p-5 flex items-center gap-4 text-left hover:border-violet-400/40 transition-all group"
+        >
+          <div className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center group-hover:bg-violet-500/30 transition-colors">
+            <Download className="w-6 h-6 text-violet-400" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-white font-semibold">Download Fitness Plan PDF</h3>
+            <p className="text-white/40 text-xs mt-0.5">Your personalized workout & nutrition plan</p>
+          </div>
+          <span className="text-violet-400 text-sm font-medium">Download</span>
+        </m.button>
+      )}
+    </m.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+export default function VoiceInterface({ agent, onClose }: VoiceInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const responseIndex = useRef(0);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [statusText, setStatusText] = useState("");
+  const [mikaMode, setMikaMode] = useState<"chat" | "voice">("chat");
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [agentTranscript, setAgentTranscript] = useState("");
+  const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [voiceConnected, setVoiceConnected] = useState(false);
+
+  // Bheema state
+  const [cameraActive, setCameraActive] = useState(false);
+  const [repInfo, setRepInfo] = useState<{ reps: number; target: number; sets: number; targetSets: number } | null>(null);
+
+  // Refs
+  const sessionIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micSinkRef = useRef<GainNode | null>(null);
+  const nextPlayTimeRef = useRef(0);
+  const speechStartRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const config = agent ? agentConfig[agent] : null;
+  // Bheema refs
+  const visionWsRef = useRef<WebSocket | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const visionIntervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
   const isMika = agent === "mika";
 
-  // Stop Lenis when overlay is open so inner scroll works
   useEffect(() => {
     if (!agent) return;
     document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = "";
-    };
+    return () => { document.documentElement.style.overflow = ""; };
   }, [agent]);
 
   useEffect(() => {
-    if (agent && config) {
-      setMessages([{ role: "assistant", content: config.greeting }]);
-      responseIndex.current = 0;
-      setTranscript("");
-      setIsListening(false);
-      setIsProcessing(false);
-      setInput("");
-    }
-  }, [agent, config]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, agentTranscript]);
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+  // ─── Gapless audio playback ────────────────────────────────────
+  const playAudioChunk = useCallback((pcm16: Int16Array) => {
+    const ctx = audioContextRef.current;
+    const gainNode = gainNodeRef.current;
+    if (!ctx || !gainNode) return;
+    const float32 = new Float32Array(pcm16.length);
+    for (let i = 0; i < pcm16.length; i++) float32[i] = pcm16[i] / 32768;
+    const buffer = ctx.createBuffer(1, float32.length, 24000);
+    buffer.copyToChannel(float32, 0);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gainNode);
+    const now = ctx.currentTime;
+    if (nextPlayTimeRef.current < now - 0.1) nextPlayTimeRef.current = now + 0.05;
+    const startTime = Math.max(now, nextPlayTimeRef.current);
+    source.start(startTime);
+    nextPlayTimeRef.current = startTime + buffer.duration;
   }, []);
 
-  const getMockResponse = useCallback(() => {
-    if (!config) return "";
-    const resp =
-      config.mockResponses[responseIndex.current % config.mockResponses.length];
-    responseIndex.current++;
-    return resp;
-  }, [config]);
+  // ─── Voice cleanup ─────────────────────────────────────────────
+  const disconnectVoice = useCallback(() => {
+    if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
+    if (micSinkRef.current) { micSinkRef.current.disconnect(); micSinkRef.current = null; }
+    if (sourceRef.current) { sourceRef.current.disconnect(); sourceRef.current = null; }
+    if (mediaStreamRef.current) { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
+    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+    gainNodeRef.current = null;
+    nextPlayTimeRef.current = 0;
+    setVoiceConnected(false);
+    setIsAgentSpeaking(false);
+    setIsUserSpeaking(false);
+    setAgentTranscript("");
+  }, []);
 
-  const sendMessage = useCallback(
-    (text: string) => {
-      if (!text.trim()) return;
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
-      setInput("");
-      setIsProcessing(true);
-      setTimeout(() => {
-        setIsProcessing(false);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: getMockResponse() },
-        ]);
-      }, 1200);
-    },
-    [getMockResponse]
-  );
+  const cleanup = useCallback(() => {
+    disconnectVoice();
+    if (visionWsRef.current) { try { visionWsRef.current.send(JSON.stringify({ type: "stop" })); } catch {} visionWsRef.current.close(); visionWsRef.current = null; }
+    if (visionIntervalRef.current) { clearInterval(visionIntervalRef.current); visionIntervalRef.current = undefined; }
+    if (cameraStreamRef.current) { cameraStreamRef.current.getTracks().forEach(t => t.stop()); cameraStreamRef.current = null; }
+    setCameraActive(false);
+    setRepInfo(null);
+  }, [disconnectVoice]);
 
-  const toggleListening = () => {
-    if (isListening) {
-      setIsListening(false);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (transcript) {
-        sendMessage(transcript);
-        setTranscript("");
-      }
-    } else {
-      setIsListening(true);
-      setTranscript("");
-      const mockPhrases = [
-        "What workout should I do today",
-        "How many sets for hypertrophy",
-        "Design me a full body routine",
-      ];
-      const phrase =
-        mockPhrases[responseIndex.current % mockPhrases.length];
-      let i = 0;
-      intervalRef.current = setInterval(() => {
-        if (i < phrase.length) {
-          setTranscript(phrase.slice(0, i + 1));
-          i++;
-        } else {
-          if (intervalRef.current) clearInterval(intervalRef.current);
+  // ─── Fetch profile ─────────────────────────────────────────────
+  const fetchProfile = useCallback(async (userId: string) => {
+    try {
+      const resp = await fetch(`${API_BASE}/onboarding/profile/${userId}`);
+      if (resp.ok) setProfileData(await resp.json());
+    } catch {}
+  }, []);
+
+  // ─── Save voice transcript to backend ──────────────────────────
+  const saveVoiceTranscript = useCallback(async (userText: string, assistantText: string) => {
+    if (!sessionIdRef.current || !userIdRef.current) return;
+    try {
+      const resp = await fetch(`${API_BASE}/onboarding/voice-transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionIdRef.current,
+          user_id: userIdRef.current,
+          user_text: userText,
+          assistant_text: assistantText,
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.onboarding_complete) {
+          setOnboardingComplete(true);
+          setMessages(prev => [...prev, {
+            id: `sys-${Date.now()}`, role: "system",
+            content: data.plan_generated
+              ? "Your fitness plan has been generated and emailed!"
+              : "Onboarding complete! Plan is being processed...",
+          }]);
+          if (userIdRef.current) fetchProfile(userIdRef.current);
         }
-      }, 50);
-    }
-  };
+      }
+    } catch {}
+  }, [fetchProfile]);
 
+  // ─── Init on agent change ─────────────────────────────────────
+  useEffect(() => {
+    if (!agent) { cleanup(); return; }
+    setMessages([]);
+    setInput("");
+    setIsProcessing(false);
+    setOnboardingComplete(false);
+    setStatusText("");
+    setProfileData(null);
+    setMikaMode("chat");
+    setAgentTranscript("");
+    setVoiceConnected(false);
+    sessionIdRef.current = null;
+    userIdRef.current = null;
+
+    if (agent === "mika") initMika();
+    else if (agent === "bheema") {
+      setMessages([{ id: "greeting", role: "assistant", content: "I'm Bheema, your personal trainer. Press the mic button to start talking with me." }]);
+    }
+    return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent]);
+
+  // ─── MIKA: Init session ────────────────────────────────────────
+  async function initMika() {
+    setIsProcessing(true);
+    setStatusText("Connecting to Mika...");
+    try {
+      const resp = await fetch(`${API_BASE}/onboarding/start`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      sessionIdRef.current = data.session_id;
+      userIdRef.current = data.user_id;
+      setMessages([{ id: "greeting", role: "assistant", content: data.message }]);
+      setStatusText("Online");
+    } catch (e: any) {
+      setMessages([{ id: "err", role: "system", content: `Could not connect. Make sure backend is running. (${e.message})` }]);
+      setStatusText("Connection failed");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  // ─── MIKA: Send chat message ───────────────────────────────────
+  const sendMikaMessage = useCallback(async (text: string) => {
+    if (!text.trim() || !sessionIdRef.current || onboardingComplete) return;
+
+    // If voice is connected, send as text through the WS
+    if (voiceConnected && wsRef.current?.readyState === WebSocket.OPEN) {
+      setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: "user", content: text }]);
+      setInput("");
+      wsRef.current.send(JSON.stringify({
+        type: "conversation.item.create",
+        item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+      }));
+      wsRef.current.send(JSON.stringify({ type: "response.create" }));
+      return;
+    }
+
+    setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: "user", content: text }]);
+    setInput("");
+    setIsProcessing(true);
+    try {
+      const resp = await fetch(`${API_BASE}/onboarding/answer`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionIdRef.current, message: text }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: data.message }]);
+      if (data.onboarding_complete) {
+        setOnboardingComplete(true);
+        setMessages(prev => [...prev, { id: `sys-${Date.now()}`, role: "system",
+          content: data.plan_generated ? "Your fitness plan has been generated and emailed!" : "Onboarding complete! Plan is being processed..." }]);
+        if (userIdRef.current) fetchProfile(userIdRef.current);
+      }
+    } catch (e: any) {
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Network error: ${e.message}` }]);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [onboardingComplete, voiceConnected, fetchProfile]);
+
+  // ─── MIKA: Connect voice (direct to OpenAI, iSureTech pattern) ─
+  const connectMikaVoice = useCallback(async () => {
+    setStatusText("Connecting voice...");
+    try {
+      // 1. Get ephemeral key
+      const tokenRes = await fetch("/api/mika-realtime", { method: "POST" });
+      if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenRes.status}`);
+      const tokenData = await tokenRes.json();
+      const ephemeralKey = tokenData.client_secret?.value;
+      if (!ephemeralKey) throw new Error("No ephemeral key");
+
+      // 2. Create AudioContext + gapless playback chain
+      const ctx = new AudioContext({ sampleRate: 24000 });
+      audioContextRef.current = ctx;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1.0;
+      gainNodeRef.current = gainNode;
+      gainNode.connect(ctx.destination);
+      nextPlayTimeRef.current = 0;
+
+      // 3. Open direct WS to OpenAI
+      const ws = new WebSocket(
+        "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17",
+        ["realtime", `openai-insecure-api-key.${ephemeralKey}`, "openai-beta.realtime-v1"]
+      );
+      wsRef.current = ws;
+
+      // Accumulate assistant transcript per response
+      let currentAssistantText = "";
+      let lastUserText = "";
+
+      ws.onopen = async () => {
+        setVoiceConnected(true);
+        setStatusText("Connected! Mika is listening.");
+
+        // Replay existing messages for context
+        const currentMessages = messages.filter(m => m.role === "user" || m.role === "assistant");
+        if (currentMessages.length > 0) {
+          for (const msg of currentMessages) {
+            ws.send(JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "message", role: msg.role === "user" ? "user" : "assistant",
+                content: [{ type: msg.role === "user" ? "input_text" : "text", text: msg.content }],
+              },
+            }));
+          }
+          ws.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message", role: "user",
+              content: [{ type: "input_text", text: "[Voice mode activated. Continue the conversation where you left off. Do NOT re-greet or re-ask questions already answered. Keep responses short.]" }],
+            },
+          }));
+          ws.send(JSON.stringify({ type: "response.create" }));
+        } else {
+          ws.send(JSON.stringify({ type: "response.create" }));
+        }
+
+        // 4. Start mic capture with SILENT SINK (no echo!)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+          });
+          mediaStreamRef.current = stream;
+          const source = ctx.createMediaStreamSource(stream);
+          sourceRef.current = source;
+          const processor = ctx.createScriptProcessor(4096, 1, 1);
+          processorRef.current = processor;
+
+          processor.onaudioprocess = (e) => {
+            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            const ratio = ctx.sampleRate / 24000;
+            const outputLength = Math.floor(inputData.length / ratio);
+            const output = new Float32Array(outputLength);
+            for (let i = 0; i < outputLength; i++) output[i] = inputData[Math.floor(i * ratio)];
+            const pcm16 = floatTo16BitPCM(output);
+            wsRef.current.send(JSON.stringify({ type: "input_audio_buffer.append", audio: base64EncodeAudio(pcm16) }));
+          };
+
+          source.connect(processor);
+          // SILENT SINK — prevents mic audio from playing through speakers (echo)
+          const micSink = ctx.createGain();
+          micSink.gain.value = 0;
+          micSink.connect(ctx.destination);
+          micSinkRef.current = micSink;
+          processor.connect(micSink);
+        } catch (e: any) {
+          setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Mic access denied: ${e.message}` }]);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case "input_audio_buffer.speech_started":
+            setIsUserSpeaking(true);
+            speechStartRef.current = Date.now();
+            break;
+
+          case "input_audio_buffer.speech_stopped":
+            setIsUserSpeaking(false);
+            break;
+
+          case "conversation.item.input_audio_transcription.completed": {
+            const transcript = (data.transcript || "").trim();
+            const duration = Date.now() - speechStartRef.current;
+            if (isNoiseTranscript(transcript, duration)) break;
+            setIsUserSpeaking(false);
+            lastUserText = transcript;
+            setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: "user", content: transcript }]);
+            break;
+          }
+
+          case "response.audio_transcript.delta":
+            if (data.delta) {
+              currentAssistantText += data.delta;
+              setAgentTranscript(currentAssistantText);
+            }
+            break;
+
+          case "response.audio_transcript.done":
+            if (data.transcript) {
+              const finalText = data.transcript.trim();
+              setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: finalText }]);
+              setAgentTranscript("");
+              // Save to backend DB + check profile completion
+              saveVoiceTranscript(lastUserText, finalText);
+              currentAssistantText = "";
+              lastUserText = "";
+            }
+            break;
+
+          case "response.audio.delta":
+            if (data.delta) {
+              setIsAgentSpeaking(true);
+              playAudioChunk(base64DecodeAudio(data.delta));
+            }
+            break;
+
+          case "response.audio.done":
+            setIsAgentSpeaking(false);
+            break;
+
+          case "error":
+            console.error("OpenAI Realtime error:", data.error);
+            setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Voice error: ${data.error?.message || "Unknown"}` }]);
+            break;
+        }
+      };
+
+      ws.onerror = () => {
+        setStatusText("Connection error");
+        setVoiceConnected(false);
+      };
+
+      ws.onclose = () => {
+        setStatusText(mikaMode === "voice" ? "Disconnected" : "Chat mode");
+        setVoiceConnected(false);
+        setIsAgentSpeaking(false);
+      };
+    } catch (e: any) {
+      setStatusText("Connection failed");
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Voice connection failed: ${e.message}` }]);
+    }
+  }, [messages, mikaMode, playAudioChunk, saveVoiceTranscript]);
+
+  // ─── MIKA: Toggle mode ─────────────────────────────────────────
+  const toggleMikaMode = useCallback(() => {
+    if (onboardingComplete) return;
+    if (mikaMode === "chat") {
+      setMikaMode("voice");
+      connectMikaVoice();
+    } else {
+      disconnectVoice();
+      setMikaMode("chat");
+      setStatusText("Chat mode");
+    }
+  }, [mikaMode, onboardingComplete, connectMikaVoice, disconnectVoice]);
+
+  // ─── BHEEMA: Connect voice (backend relay) ─────────────────────
+  const connectBheemaVoice = useCallback(async () => {
+    const sid = "bheema-" + Date.now();
+    setStatusText("Connecting to Coach Bheema...");
+    const ws = new WebSocket(`${WS_BASE}/realtime/ws/${sid}`);
+    wsRef.current = ws;
+
+    const ctx = new AudioContext({ sampleRate: 24000 });
+    audioContextRef.current = ctx;
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = 1.0;
+    gainNodeRef.current = gainNode;
+    gainNode.connect(ctx.destination);
+    nextPlayTimeRef.current = 0;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "config", user_id: userIdRef.current || "", vision_session_id: sid }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        switch (msg.type) {
+          case "audio":
+            playAudioChunk(base64DecodeAudio(msg.data));
+            break;
+          case "transcript":
+            if (msg.role === "assistant" && msg.text) {
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && !last.content.startsWith("I'm Bheema"))
+                  return [...prev.slice(0, -1), { ...last, content: last.content + msg.text }];
+                return [...prev, { id: `a-${Date.now()}`, role: "assistant", content: msg.text }];
+              });
+            }
+            break;
+          case "user_transcript":
+            if (msg.text) setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: "user", content: msg.text }]);
+            break;
+          case "status":
+            setStatusText(msg.message || "");
+            break;
+          case "rep_sync":
+            setRepInfo({ reps: msg.reps || 0, target: msg.target_reps || 0, sets: msg.sets_completed || 0, targetSets: msg.target_sets || 0 });
+            break;
+          case "error":
+            setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Error: ${msg.message}` }]);
+            break;
+        }
+      } catch {}
+    };
+
+    ws.onerror = () => { setStatusText("Connection error"); };
+    ws.onclose = () => { setStatusText("Disconnected"); setVoiceConnected(false); };
+
+    // Mic with silent sink
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      mediaStreamRef.current = stream;
+      const source = ctx.createMediaStreamSource(stream);
+      sourceRef.current = source;
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+      processor.onaudioprocess = (e) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        const ratio = ctx.sampleRate / 24000;
+        const len = Math.floor(inputData.length / ratio);
+        const out = new Float32Array(len);
+        for (let i = 0; i < len; i++) out[i] = inputData[Math.floor(i * ratio)];
+        wsRef.current.send(JSON.stringify({ type: "audio", data: base64EncodeAudio(floatTo16BitPCM(out)) }));
+      };
+      source.connect(processor);
+      const micSink = ctx.createGain();
+      micSink.gain.value = 0;
+      micSink.connect(ctx.destination);
+      micSinkRef.current = micSink;
+      processor.connect(micSink);
+      setVoiceConnected(true);
+      setStatusText("Connected! Coach Bheema is ready.");
+    } catch (e: any) {
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Mic denied: ${e.message}` }]);
+    }
+  }, [playAudioChunk]);
+
+  const toggleBheemaVoice = useCallback(() => {
+    if (voiceConnected) { disconnectVoice(); setStatusText("Disconnected"); }
+    else connectBheemaVoice();
+  }, [voiceConnected, disconnectVoice, connectBheemaVoice]);
+
+  // ─── BHEEMA: Camera ────────────────────────────────────────────
+  const toggleCamera = useCallback(async () => {
+    if (cameraActive) {
+      if (visionIntervalRef.current) { clearInterval(visionIntervalRef.current); visionIntervalRef.current = undefined; }
+      if (visionWsRef.current) { try { visionWsRef.current.send(JSON.stringify({ type: "stop" })); } catch {} visionWsRef.current.close(); visionWsRef.current = null; }
+      if (cameraStreamRef.current) { cameraStreamRef.current.getTracks().forEach(t => t.stop()); cameraStreamRef.current = null; }
+      setCameraActive(false); setRepInfo(null); return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+      const vsid = "vision-" + Date.now();
+      const vws = new WebSocket(`${WS_BASE}/vision/ws/${vsid}`);
+      visionWsRef.current = vws;
+      vws.onopen = () => {
+        vws.send(JSON.stringify({ type: "start", exercise: "squat", target_reps: 10, target_sets: 3 }));
+        visionIntervalRef.current = setInterval(() => {
+          if (!canvasRef.current || !videoRef.current || !visionWsRef.current || visionWsRef.current.readyState !== WebSocket.OPEN) return;
+          const c = canvasRef.current; c.width = 640; c.height = 480;
+          const cx = c.getContext("2d"); if (!cx) return;
+          cx.drawImage(videoRef.current, 0, 0, 640, 480);
+          visionWsRef.current!.send(JSON.stringify({ type: "frame", data: c.toDataURL("image/jpeg", 0.7).split(",")[1] }));
+        }, 100);
+      };
+      vws.onmessage = (ev) => { try { const m = JSON.parse(ev.data); if (m.type === "rep_update") setRepInfo({ reps: m.reps||0, target: m.target_reps||0, sets: m.sets_completed||0, targetSets: m.target_sets||0 }); } catch {} };
+      setCameraActive(true);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: "system", content: `Camera denied: ${e.message}` }]);
+    }
+  }, [cameraActive]);
+
+  const handleClose = useCallback(() => { cleanup(); onClose(); }, [cleanup, onClose]);
+
+  // ─── Orb state ─────────────────────────────────────────────────
+  const orbActive = isAgentSpeaking || isUserSpeaking || voiceConnected;
+
+  // ═══════════════════════════════════════════════════════════════
   return (
     <AnimatePresence>
       {agent && (
-        <m.div
-          key="voice-overlay"
-          variants={overlayVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col"
-          // Stop wheel events from reaching Lenis
-          onWheel={(e) => e.stopPropagation()}
-        >
-          {/* ── Header ── */}
-          <m.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.3 }}
-            className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0"
-          >
+        <m.div key="voice-overlay" variants={overlayVariants} initial="hidden" animate="visible" exit="exit"
+          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col" onWheel={e => e.stopPropagation()}>
+
+          {/* Header */}
+          <m.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.3 }}
+            className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-4">
-              <m.button
-                whileHover={{ scale: 1.1, x: -2 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={onClose}
-                className="p-2 rounded-xl border border-white/10 hover:bg-white/5 transition-all text-white/50 hover:text-white"
-              >
+              <m.button whileHover={{ scale: 1.1, x: -2 }} whileTap={{ scale: 0.9 }} onClick={handleClose}
+                className="p-2 rounded-xl border border-white/10 hover:bg-white/5 transition-all text-white/50 hover:text-white">
                 <ArrowLeft className="w-5 h-5" />
               </m.button>
               <div className="flex items-center gap-3">
-                <m.div
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className={`w-2.5 h-2.5 rounded-full ${isMika ? "bg-violet-400" : "bg-orange-400"}`}
-                />
-                <span className="font-semibold">{config?.name}</span>
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${isMika ? "bg-violet-400/10 text-violet-400" : "bg-orange-400/10 text-orange-400"}`}
-                >
-                  {isMika ? "Chat" : "Voice"} Mode
+                <m.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}
+                  className={`w-2.5 h-2.5 rounded-full ${isMika ? "bg-violet-400" : "bg-orange-400"}`} />
+                <span className="font-semibold">{isMika ? "Mika" : "Bheema"}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${isMika ? "bg-violet-400/10 text-violet-400" : "bg-orange-400/10 text-orange-400"}`}>
+                  {isMika ? (mikaMode === "voice" ? "Voice" : "Chat") : "Voice"} Mode
                 </span>
+                {statusText && <span className="text-[10px] text-white/30 ml-2">{statusText}</span>}
               </div>
             </div>
-            <m.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onClose}
-              className="px-4 py-1.5 rounded-full text-xs border border-white/10 hover:border-white/20 text-white/40 hover:text-white transition-all"
-            >
-              Back to Home
-            </m.button>
+            <div className="flex items-center gap-3">
+              {isMika && !onboardingComplete && (
+                <m.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={toggleMikaMode}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition-all ${
+                    mikaMode === "voice" ? "border-violet-400/30 bg-violet-400/10 text-violet-400" : "border-white/10 text-white/40 hover:border-violet-400/30 hover:text-violet-400"}`}>
+                  {mikaMode === "chat" ? <><Mic className="w-3 h-3" />Voice</> : <><MessageSquare className="w-3 h-3" />Chat</>}
+                </m.button>
+              )}
+              <m.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleClose}
+                className="px-4 py-1.5 rounded-full text-xs border border-white/10 hover:border-white/20 text-white/40 hover:text-white transition-all">
+                Back to Home
+              </m.button>
+            </div>
           </m.div>
 
           {isMika ? (
-            /* ══════════ MIKA: Chat ══════════ */
-            <>
-              <div
-                ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto px-6 py-6"
-                style={{ overscrollBehavior: "contain" }}
-              >
-                <div className="max-w-2xl mx-auto space-y-4">
-                  {messages.map((msg, i) => (
-                    <m.div
-                      key={i}
-                      initial={{ opacity: 0, y: 14, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{
-                        duration: 0.35,
-                        ease: [0.16, 1, 0.3, 1] as const,
-                      }}
-                      className={`flex ${
-                        msg.role === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-md px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                          msg.role === "user"
-                            ? "bg-white/10 text-white rounded-br-md"
-                            : "bg-violet-400/10 text-violet-50 border border-violet-400/10 rounded-bl-md"
-                        }`}
-                      >
-                        {msg.content}
-                      </div>
-                    </m.div>
-                  ))}
-                  <div ref={messagesEndRef} />
+            mikaMode === "voice" ? (
+              /* ── MIKA VOICE ── */
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 flex flex-col items-center justify-center relative">
+                  <m.div className="absolute inset-0 pointer-events-none" animate={{ opacity: orbActive ? 1 : 0.4 }}
+                    style={{ background: "radial-gradient(ellipse 60% 50% at center, rgba(167,139,250,0.06) 0%, transparent 70%)" }} />
+                  <m.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: isAgentSpeaking ? 1.12 : isUserSpeaking ? 1.06 : 1 }}
+                    transition={{ scale: { type: "spring", stiffness: 120, damping: 15 } }}
+                    className="cursor-pointer" onClick={toggleMikaMode} title="Click to switch to chat">
+                    <ReactiveOrb color="#a78bfa" isActive={orbActive} size={300} />
+                  </m.div>
+                  <m.div initial={{ opacity: 0, scaleX: 0.6 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.4, duration: 0.5 }} className="-mt-2">
+                    <Waveform isActive={orbActive} color="#a78bfa" width={360} height={80} />
+                  </m.div>
+                  <div className="h-14 flex flex-col items-center justify-center mt-1">
+                    <AnimatePresence mode="wait">
+                      {isAgentSpeaking && agentTranscript ? (
+                        <m.p key="speaking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-sm text-white/60 text-center max-w-md line-clamp-2">
+                          {agentTranscript.slice(-120)}
+                        </m.p>
+                      ) : isUserSpeaking ? (
+                        <m.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-xs text-violet-400/50">Listening...</m.p>
+                      ) : voiceConnected ? (
+                        <m.p key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-xs text-white/20">Tap orb to switch to chat</m.p>
+                      ) : (
+                        <m.p key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="text-xs text-white/20">Connecting...</m.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
+                {messages.length > 0 && (
+                  <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                    className="shrink-0 px-6 py-4 border-t border-white/5 max-h-56 overflow-y-auto" style={{ overscrollBehavior: "contain" }}>
+                    <div className="max-w-2xl mx-auto space-y-3">
+                      {messages.slice(-8).map(msg => (
+                        <m.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          className={`flex ${msg.role === "user" ? "justify-end" : msg.role === "system" ? "justify-center" : "justify-start"}`}>
+                          <div className={`max-w-md px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                            msg.role === "user" ? "bg-white/10 text-white rounded-br-md"
+                            : msg.role === "system" ? "bg-emerald-500/10 text-emerald-300/60 text-xs"
+                            : "bg-violet-400/10 text-violet-50 border border-violet-400/10 rounded-bl-md"}`}>
+                            {msg.content}
+                          </div>
+                        </m.div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </m.div>
+                )}
               </div>
-
-              <m.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.4 }}
-                className="px-6 py-5 border-t border-white/5 bg-[#0a0a0a] shrink-0"
-              >
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    sendMessage(input);
-                  }}
-                  className="flex items-center gap-3 max-w-2xl mx-auto"
-                >
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask Mika about nutrition..."
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-400/40 focus:bg-white/[0.07] transition-all"
-                    autoFocus
-                  />
-                  <m.button
-                    type="submit"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.92 }}
-                    className="p-3.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white transition-all shadow-[0_0_20px_rgba(167,139,250,0.25)]"
-                  >
-                    <Send className="w-4 h-4" />
-                  </m.button>
-                </form>
-              </m.div>
-            </>
+            ) : (
+              /* ── MIKA CHAT ── */
+              <>
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-6 py-6" style={{ overscrollBehavior: "contain" }}>
+                  <div className="max-w-2xl mx-auto space-y-4">
+                    {messages.map(msg => (
+                      <m.div key={msg.id} initial={{ opacity: 0, y: 14, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] as const }}
+                        className={`flex ${msg.role === "user" ? "justify-end" : msg.role === "system" ? "justify-center" : "justify-start"}`}>
+                        <div className={`max-w-md px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                          msg.role === "user" ? "bg-white/10 text-white rounded-br-md"
+                          : msg.role === "system" ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-center"
+                          : "bg-violet-400/10 text-violet-50 border border-violet-400/10 rounded-bl-md"}`}>
+                          {msg.content}
+                        </div>
+                      </m.div>
+                    ))}
+                    {isProcessing && (
+                      <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                        <div className="bg-violet-400/10 border border-violet-400/10 rounded-2xl rounded-bl-md px-4 py-3 text-sm text-violet-300">
+                          <m.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.5, repeat: Infinity }}>Mika is typing...</m.span>
+                        </div>
+                      </m.div>
+                    )}
+                    {onboardingComplete && profileData && <ProfileCards profile={profileData} />}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+                <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4 }}
+                  className="px-6 py-5 border-t border-white/5 bg-[#0a0a0a] shrink-0">
+                  <form onSubmit={e => { e.preventDefault(); sendMikaMessage(input); }}
+                    className="flex items-center gap-3 max-w-2xl mx-auto">
+                    <input type="text" value={input} onChange={e => setInput(e.target.value)}
+                      placeholder={onboardingComplete ? "Onboarding complete! Download your plan above." : "Type your message to Mika..."}
+                      disabled={isProcessing || onboardingComplete}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-400/40 focus:bg-white/[0.07] transition-all disabled:opacity-40"
+                      autoFocus />
+                    <m.button type="submit" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.92 }}
+                      disabled={isProcessing || onboardingComplete || !input.trim()}
+                      className="p-3.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white transition-all shadow-[0_0_20px_rgba(167,139,250,0.25)] disabled:opacity-40 disabled:cursor-not-allowed">
+                      <Send className="w-4 h-4" />
+                    </m.button>
+                  </form>
+                </m.div>
+              </>
+            )
           ) : (
-            /* ══════════ BHEEMA: Voice ══════════ */
+            /* ══════════ BHEEMA ══════════ */
             <div className="flex-1 flex flex-col min-h-0">
-              {/* Center: orb + waveform + controls */}
-              <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
-                {/* Radial background glow */}
-                <m.div
-                  className="absolute inset-0 pointer-events-none"
-                  animate={{
-                    opacity: isListening ? 1 : 0.4,
-                  }}
-                  transition={{ duration: 0.8 }}
-                  style={{
-                    background:
-                      "radial-gradient(ellipse 60% 50% at center, rgba(251,146,60,0.06) 0%, transparent 70%)",
-                  }}
-                />
-
-                {/* Orb with scale animation on state change */}
-                <m.div
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{
-                    opacity: 1,
-                    scale: isListening ? 1.08 : 1,
-                  }}
-                  transition={{
-                    opacity: { delay: 0.2, duration: 0.6 },
-                    scale: {
-                      type: "spring",
-                      stiffness: 120,
-                      damping: 15,
-                    },
-                  }}
-                >
-                  <ReactiveOrb
-                    color="#fb923c"
-                    isActive={isListening}
-                    size={300}
-                  />
+              <div className="flex-1 flex flex-col items-center justify-center relative">
+                <m.div className="absolute inset-0 pointer-events-none" animate={{ opacity: voiceConnected ? 1 : 0.4 }}
+                  style={{ background: "radial-gradient(ellipse 60% 50% at center, rgba(251,146,60,0.06) 0%, transparent 70%)" }} />
+                {cameraActive && (
+                  <div className="absolute top-4 right-4 w-48 h-36 rounded-xl overflow-hidden border border-orange-400/30 shadow-lg z-10">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} />
+                    {repInfo && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-3 py-1.5 text-xs">
+                        <span className="text-orange-400 font-bold">{repInfo.reps}/{repInfo.target}</span>
+                        <span className="text-white/50 ml-2">Set {repInfo.sets + 1}/{repInfo.targetSets}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <canvas ref={canvasRef} className="hidden" />
+                <m.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: voiceConnected ? 1.08 : 1 }}
+                  transition={{ opacity: { delay: 0.2, duration: 0.6 }, scale: { type: "spring", stiffness: 120, damping: 15 } }}>
+                  <ReactiveOrb color="#fb923c" isActive={voiceConnected} size={300} />
                 </m.div>
-
-                {/* Waveform — wider and taller */}
-                <m.div
-                  initial={{ opacity: 0, scaleX: 0.6 }}
-                  animate={{ opacity: 1, scaleX: 1 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                  className="-mt-2"
-                >
-                  <Waveform
-                    isActive={isListening}
-                    color="#fb923c"
-                    width={360}
-                    height={80}
-                  />
+                <m.div initial={{ opacity: 0, scaleX: 0.6 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.4, duration: 0.5 }} className="-mt-2">
+                  <Waveform isActive={voiceConnected} color="#fb923c" width={360} height={80} />
                 </m.div>
-
-                {/* Status + transcript */}
                 <div className="h-14 flex flex-col items-center justify-center mt-1">
                   <AnimatePresence mode="wait">
-                    {transcript ? (
-                      <m.p
-                        key="transcript"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        className="text-sm text-white/50 text-center max-w-md"
-                      >
-                        &ldquo;{transcript}
-                        <m.span
-                          animate={{ opacity: [1, 0] }}
-                          transition={{ duration: 0.5, repeat: Infinity }}
-                          className="inline-block w-0.5 h-4 bg-orange-400 ml-0.5 align-middle"
-                        />
-                        &rdquo;
-                      </m.p>
-                    ) : isProcessing ? (
-                      <m.div
-                        key="processing"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-2 text-xs text-orange-400/60"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                        <span>Bheema is thinking...</span>
-                        <m.span
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{ duration: 1.5, repeat: Infinity }}
-                        >
-                          ...
-                        </m.span>
-                      </m.div>
-                    ) : isListening ? (
-                      <m.p
-                        key="listening"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-orange-400/50"
-                      >
-                        Listening...
-                      </m.p>
+                    {voiceConnected ? (
+                      <m.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-orange-400/50">Listening...</m.p>
                     ) : (
-                      <m.p
-                        key="idle"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-white/20"
-                      >
-                        Ready
-                      </m.p>
+                      <m.p key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-white/20">Ready</m.p>
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* Mic button */}
-                <m.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                  className="flex flex-col items-center gap-3 mt-2"
-                >
-                  <m.button
-                    onClick={toggleListening}
-                    whileHover={{ scale: 1.08 }}
-                    whileTap={{ scale: 0.88 }}
-                    animate={{
-                      scale: isListening ? [1, 1.04, 1] : 1,
-                    }}
-                    transition={
-                      isListening
-                        ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" }
-                        : {}
-                    }
-                    className={`relative rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isListening
-                        ? "bg-orange-500 mic-pulse shadow-[0_0_50px_rgba(251,146,60,0.4)]"
-                        : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30"
-                    }`}
-                    style={{ width: 68, height: 68 }}
-                  >
-                    <AnimatePresence mode="wait">
-                      {isListening ? (
-                        <m.div
-                          key="off"
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.5, opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <MicOff className="w-6 h-6 text-white" />
-                        </m.div>
-                      ) : (
-                        <m.div
-                          key="on"
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.5, opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                        >
-                          <Mic className="w-6 h-6 text-orange-400" />
-                        </m.div>
-                      )}
-                    </AnimatePresence>
-                  </m.button>
-                  <p className="text-[11px] text-white/20">
-                    {isListening ? "Tap to stop" : "Tap to speak"}
-                  </p>
+                <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.5 }}
+                  className="flex items-center gap-6 mt-2">
+                  <div className="flex flex-col items-center gap-2">
+                    <m.button onClick={toggleCamera} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.88 }}
+                      className={`rounded-full flex items-center justify-center transition-all duration-300 ${
+                        cameraActive ? "bg-orange-500/80 shadow-[0_0_30px_rgba(251,146,60,0.3)]"
+                        : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30"}`}
+                      style={{ width: 52, height: 52 }}>
+                      {cameraActive ? <CameraOff className="w-5 h-5 text-white" /> : <Camera className="w-5 h-5 text-orange-400" />}
+                    </m.button>
+                    <p className="text-[10px] text-white/20">{cameraActive ? "Stop camera" : "Start camera"}</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-3">
+                    <m.button onClick={toggleBheemaVoice} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.88 }}
+                      animate={{ scale: voiceConnected ? [1, 1.04, 1] : 1 }}
+                      transition={voiceConnected ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
+                      className={`relative rounded-full flex items-center justify-center transition-all duration-300 ${
+                        voiceConnected ? "bg-orange-500 mic-pulse shadow-[0_0_50px_rgba(251,146,60,0.4)]"
+                        : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30"}`}
+                      style={{ width: 68, height: 68 }}>
+                      <AnimatePresence mode="wait">
+                        {voiceConnected ? (
+                          <m.div key="off" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
+                            <MicOff className="w-6 h-6 text-white" />
+                          </m.div>
+                        ) : (
+                          <m.div key="on" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
+                            <Mic className="w-6 h-6 text-orange-400" />
+                          </m.div>
+                        )}
+                      </AnimatePresence>
+                    </m.button>
+                    <p className="text-[11px] text-white/20">{voiceConnected ? "Tap to stop" : "Tap to speak"}</p>
+                  </div>
                 </m.div>
               </div>
-
-              {/* Messages at bottom */}
               {messages.length > 1 && (
-                <m.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="shrink-0 px-6 py-4 border-t border-white/5 max-h-56 overflow-y-auto"
-                  style={{ overscrollBehavior: "contain" }}
-                >
+                <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                  className="shrink-0 px-6 py-4 border-t border-white/5 max-h-56 overflow-y-auto" style={{ overscrollBehavior: "contain" }}>
                   <div className="max-w-2xl mx-auto space-y-3">
-                    {messages.slice(1).map((msg, i) => (
-                      <m.div
-                        key={i}
-                        initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{
-                          duration: 0.3,
-                          ease: [0.16, 1, 0.3, 1] as const,
-                        }}
-                        className={`flex ${
-                          msg.role === "user"
-                            ? "justify-end"
-                            : "justify-start"
-                        }`}
-                      >
-                        <div
-                          className={`max-w-md px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                            msg.role === "user"
-                              ? "bg-white/10 text-white rounded-br-md"
-                              : "bg-orange-400/10 text-orange-50 border border-orange-400/10 rounded-bl-md"
-                          }`}
-                        >
+                    {messages.slice(1).map(msg => (
+                      <m.div key={msg.id} initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className={`flex ${msg.role === "user" ? "justify-end" : msg.role === "system" ? "justify-center" : "justify-start"}`}>
+                        <div className={`max-w-md px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                          msg.role === "user" ? "bg-white/10 text-white rounded-br-md"
+                          : msg.role === "system" ? "bg-orange-400/5 text-orange-300/60 text-xs"
+                          : "bg-orange-400/10 text-orange-50 border border-orange-400/10 rounded-bl-md"}`}>
                           {msg.content}
                         </div>
                       </m.div>

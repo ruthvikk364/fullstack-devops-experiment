@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.routers import onboarding, nutrition, workout, vision, realtime
+from app.routers import onboarding, nutrition, workout, vision, realtime, mika_realtime
 from app.schemas.responses import HealthCheckResponse
 
 
@@ -47,6 +47,7 @@ app.include_router(nutrition.router, prefix="/api")
 app.include_router(workout.router, prefix="/api")
 app.include_router(vision.router, prefix="/api")
 app.include_router(realtime.router, prefix="/api")
+app.include_router(mika_realtime.router, prefix="/api")
 
 
 @app.get("/api", response_model=HealthCheckResponse)

@@ -172,16 +172,19 @@ export async function POST() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-realtime-1.5",
+          model: "gpt-4o-realtime-preview",
+          modalities: ["text", "audio"],
           voice: "shimmer",
           instructions: MIKA_SYSTEM_PROMPT,
           input_audio_transcription: { model: "whisper-1", language: "en" },
           turn_detection: {
             type: "server_vad",
-            silence_duration_ms: 2000,
-            threshold: 0.85,
-            prefix_padding_ms: 500,
+            threshold: 0.5,
+            silence_duration_ms: 700,
+            prefix_padding_ms: 300,
           },
+          temperature: 0.7,
+          max_response_output_tokens: 4096,
         }),
       }
     );

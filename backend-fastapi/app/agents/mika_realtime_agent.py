@@ -12,7 +12,7 @@ from app.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
 
 MIKA_SYSTEM_PROMPT = """You are Mika, a friendly and motivational AI fitness coach for the TrainFree platform.
 
@@ -105,9 +105,9 @@ class MikaRealtimeAgent:
                 },
                 "turn_detection": {
                     "type": "server_vad",
-                    "threshold": 0.8,
-                    "prefix_padding_ms": 500,
-                    "silence_duration_ms": 2000,
+                    "threshold": 0.5,
+                    "prefix_padding_ms": 300,
+                    "silence_duration_ms": 700,
                 },
                 "temperature": 0.7,
                 "max_response_output_tokens": 150,

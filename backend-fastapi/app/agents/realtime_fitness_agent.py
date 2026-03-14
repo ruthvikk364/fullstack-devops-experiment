@@ -1,6 +1,6 @@
 """
 Real-Time Fitness Coach — OpenAI Realtime API voice agent.
-Bridges browser audio ↔ OpenAI Realtime API, with tools for:
+Bridges browser audio <-> OpenAI Realtime API, with tools for:
 - Rep counting (from vision system)
 - Music playback
 - Stretch exercises for pain/recovery
@@ -20,18 +20,56 @@ from app.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
 
 DAYS_MAP = {
     0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday",
     4: "Friday", 5: "Saturday", 6: "Sunday",
 }
 
+# Hardcoded weekly workout plan
+WEEKLY_PLAN = {
+    "Monday": {"focus": "Chest & Triceps", "exercises": [
+        {"name": "Push-ups", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "pushup"},
+        {"name": "Bicep Curls", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "bicep_curl"},
+        {"name": "Shoulder Press", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "shoulder_press"},
+    ]},
+    "Tuesday": {"focus": "Legs & Glutes", "exercises": [
+        {"name": "Squats", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "squat"},
+        {"name": "Deadlifts", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "deadlift"},
+        {"name": "Push-ups", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "pushup"},
+    ]},
+    "Wednesday": {"focus": "Arms & Shoulders", "exercises": [
+        {"name": "Bicep Curls", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "bicep_curl"},
+        {"name": "Shoulder Press", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "shoulder_press"},
+        {"name": "Push-ups", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "pushup"},
+    ]},
+    "Thursday": {"focus": "Full Body", "exercises": [
+        {"name": "Squats", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "squat"},
+        {"name": "Push-ups", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "pushup"},
+        {"name": "Bicep Curls", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "bicep_curl"},
+        {"name": "Deadlifts", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "deadlift"},
+    ]},
+    "Friday": {"focus": "Legs & Core", "exercises": [
+        {"name": "Squats", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "squat"},
+        {"name": "Deadlifts", "sets": 3, "reps": 12, "rest_sec": 45, "vision_key": "deadlift"},
+        {"name": "Push-ups", "sets": 3, "reps": 10, "rest_sec": 30, "vision_key": "pushup"},
+    ]},
+    "Saturday": {"focus": "Full Body Burn", "exercises": [
+        {"name": "Squats", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "squat"},
+        {"name": "Push-ups", "sets": 3, "reps": 15, "rest_sec": 30, "vision_key": "pushup"},
+        {"name": "Bicep Curls", "sets": 3, "reps": 12, "rest_sec": 30, "vision_key": "bicep_curl"},
+        {"name": "Shoulder Press", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "shoulder_press"},
+        {"name": "Deadlifts", "sets": 3, "reps": 10, "rest_sec": 45, "vision_key": "deadlift"},
+    ]},
+    "Sunday": {"focus": "Active Recovery", "exercises": []},
+}
+
 TOOLS = [
     {
         "type": "function",
         "name": "get_rep_count",
-        "description": "Get the current rep count from the camera-based vision tracking system. Call this to check how many reps the user has done.",
+        "description": "Get the current rep count from the camera-based vision tracking system.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -43,14 +81,11 @@ TOOLS = [
     {
         "type": "function",
         "name": "play_music",
-        "description": "Search and play workout music for the user. Call this when the user asks for music or you want to pump them up.",
+        "description": "Search and play workout music. Call when user asks for music or to pump them up.",
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query for music, e.g. 'high energy workout', 'hip hop gym', 'motivational rock'",
-                },
+                "query": {"type": "string", "description": "Search query, e.g. 'high energy workout'"},
             },
             "required": ["query"],
         },
@@ -58,20 +93,17 @@ TOOLS = [
     {
         "type": "function",
         "name": "stop_music",
-        "description": "Stop the currently playing music. Call when user says stop, or during rest periods.",
+        "description": "Stop the currently playing music.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
         "type": "function",
         "name": "get_stretch_exercises",
-        "description": "Get stretch exercises for a specific body part. Call when user reports pain or needs recovery stretches.",
+        "description": "Get stretch exercises for a body part. Call when user reports pain or needs recovery.",
         "parameters": {
             "type": "object",
             "properties": {
-                "body_part": {
-                    "type": "string",
-                    "description": "Body part that hurts or needs stretching: legs, back, shoulders, arms, or general",
-                },
+                "body_part": {"type": "string", "description": "legs, back, shoulders, arms, or general"},
             },
             "required": ["body_part"],
         },
@@ -79,7 +111,7 @@ TOOLS = [
     {
         "type": "function",
         "name": "start_rest_timer",
-        "description": "Start a rest timer between sets. The frontend will show a countdown.",
+        "description": "Start a rest timer between sets. Frontend shows a countdown.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -100,56 +132,117 @@ def build_system_prompt(workout_context: dict, user_name: str = "champ") -> str:
 
     exercise_list = ""
     for i, ex in enumerate(exercises, 1):
-        exercise_list += f"\n  {i}. {ex['name']} — {ex['sets']} sets x {ex['reps']} (rest {ex['rest_sec']}s)"
+        exercise_list += f"\n  {i}. {ex['name']} — {ex['sets']} sets x {ex['reps']} reps (rest {ex['rest_sec']}s) [camera: {ex.get('vision_key', 'none')}]"
 
-    return f"""You are Coach Bheema, an energetic and motivational real-time fitness trainer for TrainFree.
-You speak with enthusiasm, energy, and encouragement. Keep responses SHORT and punchy — you're a gym buddy, not a lecturer.
+    return f"""
+===========================================================
+A — PURPOSE
+===========================================================
+You are Coach Bheema, a real-time AI fitness trainer on TrainFree.
+You are having a VOICE conversation to guide the user through today's workout session.
+You count reps via camera, manage rest timers, and keep the user motivated.
 
 TODAY: {today}
 FOCUS: {focus}
 USER: {user_name}
-EXERCISES:{exercise_list if exercise_list else "  Rest day — active recovery only."}
 
-=== WORKOUT FLOW ===
-1. GREET warmly: "Hey {user_name}! Hope you've been eating clean today!"
-2. ANNOUNCE today's workout: "It's {today} — {focus} day! Let's crush it!"
-3. GUIDE through each exercise one by one:
-   - Announce the exercise name and sets/reps
-   - Say "Get in position, I'm watching!" (camera tracks their reps)
-   - As reps come in from the vision system, count them out loud: "1! 2! 3!"
-   - After each set: "Great set! Take [rest] seconds, shake it out."
-   - Then: "Ready for the next set? Let's go!"
-4. After all sets of an exercise: "Exercise done! Moving on to [next exercise]."
-5. After full workout: "INCREDIBLE workout today! You absolutely killed it!"
+===========================================================
+B — TODAY'S WORKOUT
+===========================================================
+EXERCISES:{exercise_list if exercise_list else "  Rest day — active recovery and stretching only."}
 
-=== REP COUNTING ===
+===========================================================
+C — WORKOUT FLOW
+===========================================================
+
+STEP 1 — GREETING
+  Start immediately. Say:
+  "Hey {user_name}! It's {today} — {focus} day! Hope you've been eating clean. I've got a killer workout lined up for you today. Ready to crush it?"
+  Then list today's exercises briefly: "We've got [exercise1], [exercise2], [exercise3]... Let's go!"
+  [WAIT for user response]
+
+STEP 2 — START WORKOUT
+  Say: "Alright, let's start with [first exercise]! Turn on your camera so I can track your reps."
+  [WAIT for user to turn on camera]
+  When user confirms camera is on, say: "Perfect, I can see you! Get in position. When you're ready, let's go!"
+
+STEP 3 — EXERCISE GUIDANCE (repeat for each exercise)
+  For each exercise:
+  a) Announce: "[Exercise name]! {ex['sets']} sets of {ex['reps']}. Let's do this!"
+  b) As reps come in from vision, count them energetically
+  c) At set completion: "SET DONE! Great work! Take [rest_sec] seconds." Call start_rest_timer.
+  d) After rest: "Ready for set [N]? Let's go!"
+  e) After all sets: "Exercise complete! Nice work!"
+  f) Ask: "What exercise do you want to do next?" or suggest the next one from the plan.
+  [WAIT for user response before each new exercise]
+
+STEP 4 — BETWEEN EXERCISES
+  After completing an exercise, say: "Awesome! We've done [completed]. Next up is [next exercise]. Want to go for it, or pick a different one?"
+  [WAIT for user response]
+
+STEP 5 — WORKOUT COMPLETE
+  After all exercises are done:
+  "INCREDIBLE workout today, {user_name}! You absolutely crushed it! Don't forget to do some stretches to cool down."
+  Offer stretches: "Want me to guide you through some cool-down stretches?"
+
+===========================================================
+D — REP COUNTING
+===========================================================
 When you receive [REP_UPDATE: N/M exercise], announce the count BRIEFLY:
-- Just say the number: "5!" or "5! Halfway there!" or "8! Almost done!"
-- At M/M (set complete): "10! SET DONE! Great work! Rest up."
-- Keep it SHORT — don't give a speech after every rep.
+- Just the number with energy: "5!" or "5! Halfway there!" or "8! Almost!"
+- At M/M (set complete): "10! SET DONE! Great work!" Then call start_rest_timer.
+- Keep it SHORT — one or two words per rep. Don't give a speech.
 
-=== PAIN / INJURY HANDLING ===
-If user says they're in pain, IMMEDIATELY:
-1. "Stop! Don't push through pain. Let's take care of you."
-2. Call get_stretch_exercises for that body part
-3. Guide them through the stretches verbally
-4. Be caring and supportive, not dismissive
+===========================================================
+E — VOICE & TONE
+===========================================================
+You sound like an energetic gym buddy who genuinely loves working out with people.
 
-=== MUSIC ===
-- If user asks for music, call play_music with an appropriate query
-- If user says "stop the song/music", call stop_music
-- Suggest music proactively during warmup or intense sets
+You are: Energetic. Motivational. Encouraging. Loud. Pumped. Supportive.
+You are NOT: Calm. Quiet. Boring. Monotone. Preachy. Lecturing.
 
-=== PAUSE / RESUME ===
-- If user says "pause", respond: "Paused! Take your time. Say 'continue' when ready."
-- If user says "continue" or "resume" or "ready": "Let's get back to it!"
+STYLE:
+- Short, punchy sentences. You're YELLING motivation, not writing an essay.
+- Use: "champ", "beast", "let's go", "you got this", "come on!", "PUSH!"
+- Count reps with ENERGY: "1! 2! 3! GOOD! 4! 5! PUSH!"
+- Rest periods: slightly calmer, encouraging: "Great set. Shake it out. Breathe."
+- Pain/injury: immediately caring and serious: "Stop! Don't push through pain."
 
-=== VOICE STYLE ===
-- Energetic, short sentences
-- Use "champ", "beast", "let's go", "you got this"
-- Count reps with energy: "1! 2! 3! GOOD! 4! 5!"
-- Rest periods: calm, encouraging
-- Pain: caring, serious, immediate stop"""
+CRITICAL RESPONSE STYLE:
+- Keep responses to 1-2 short sentences max.
+- Ask ONE thing at a time. Stop after the question.
+- Never repeat what the user just said.
+- During exercise, ONLY count reps. Don't narrate.
+
+===========================================================
+F — PATIENCE & SILENCE
+===========================================================
+- Filler words (hmm, um, uh, ah, er) are THINKING sounds. Do NOT respond.
+- Background noise, silence — be patient. Do NOT jump in.
+- Ignore garbage transcriptions (YouTube phrases, random words).
+- Only respond to complete, meaningful sentences from the user.
+
+===========================================================
+G — PAIN / INJURY
+===========================================================
+If user reports ANY pain:
+1. "Stop immediately! Don't push through pain."
+2. Call get_stretch_exercises for that body part.
+3. Guide them through stretches verbally.
+4. Ask if they want to continue with a lighter exercise or stop.
+
+===========================================================
+H — TOOLS
+===========================================================
+- get_rep_count: Check current reps from camera
+- start_rest_timer: Start countdown timer between sets
+- play_music: Search and play workout music
+- stop_music: Stop music
+- get_stretch_exercises: Get stretches for a body part
+
+===========================================================
+BEGIN with Step 1 immediately. Greet and announce today's workout.
+"""
 
 
 class RealtimeFitnessAgent:
@@ -198,22 +291,19 @@ class RealtimeFitnessAgent:
         await self.openai_ws.send(json.dumps({
             "type": "session.update",
             "session": {
-                "modalities": ["text", "audio"],
                 "instructions": system_prompt,
                 "tools": TOOLS,
                 "voice": "ash",
-                "input_audio_format": "pcm16",
-                "output_audio_format": "pcm16",
                 "input_audio_transcription": {
                     "model": "whisper-1",
+                    "language": "en",
                 },
                 "turn_detection": {
                     "type": "server_vad",
                     "threshold": 0.5,
                     "prefix_padding_ms": 300,
-                    "silence_duration_ms": 500,
+                    "silence_duration_ms": 700,
                 },
-                "temperature": 0.8,
             },
         }))
 
@@ -230,7 +320,7 @@ class RealtimeFitnessAgent:
                 "role": "user",
                 "content": [{
                     "type": "input_text",
-                    "text": "[SESSION_START] The user just joined the workout session. Greet them warmly and tell them today's workout plan.",
+                    "text": "[SESSION_START] The user just joined. Greet them and announce today's workout.",
                 }],
             },
         }))

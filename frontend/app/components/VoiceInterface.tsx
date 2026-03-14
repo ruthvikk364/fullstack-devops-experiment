@@ -15,9 +15,14 @@ import {
   User,
   Activity,
   Mail,
+  Dumbbell,
+  CheckCircle2,
+  Timer,
+  ChevronRight,
 } from "lucide-react";
 import ReactiveOrb from "./ReactiveOrb";
 import Waveform from "./Waveform";
+import { useAuth } from "./AuthProvider";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_FASTAPI_API || "http://localhost:8080/api";
@@ -54,6 +59,20 @@ interface ProfileData {
   } | null;
   pdf_filename: string | null;
   pdf_available: boolean;
+}
+
+interface WorkoutExercise {
+  name: string;
+  sets: number;
+  reps: number;
+  rest_sec: number;
+  vision_key: string;
+}
+
+interface TodayWorkout {
+  today: string;
+  focus: string;
+  exercises: WorkoutExercise[];
 }
 
 // ─── Audio helpers ───────────────────────────────────────────────
@@ -295,6 +314,17 @@ export default function VoiceInterface({
     targetSets: number;
   } | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [conversationClosed, setConversationClosed] = useState(false);
+
+  const { user: authUser } = useAuth();
+
+  // Bheema-specific state
+  const [todayWorkout, setTodayWorkout] = useState<TodayWorkout | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<WorkoutExercise | null>(null);
+  const [completedExercises, setCompletedExercises] = useState<string[]>([]);
+  const [currentSets, setCurrentSets] = useState(0);
+  const [restTimer, setRestTimer] = useState<{ seconds: number; message: string } | null>(null);
+  const [bheemaAgentTranscript, setBheemaAgentTranscript] = useState("");
 
   // Refs
   const sessionIdRef = useRef<string | null>(null);
@@ -320,12 +350,14 @@ export default function VoiceInterface({
   const isListeningRef = useRef(false);
   const keepAliveRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const syncedMsgCountRef = useRef(0);
+  const onboardingCompleteRef = useRef(false);
 
   const isMika = agent === "mika";
 
   // Keep refs in sync with state
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { isListeningRef.current = isListening; }, [isListening]);
+  useEffect(() => { onboardingCompleteRef.current = onboardingComplete; }, [onboardingComplete]);
 
   // ─── Lenis scroll lock ─────────────────────────────────────────
   useEffect(() => {
@@ -409,6 +441,10 @@ export default function VoiceInterface({
       if (resp.ok) {
         const data = await resp.json();
         setProfileData(data);
+        // Save to localStorage so Navbar can show profile info
+        try { localStorage.setItem("trainfree_profile", JSON.stringify(data)); } catch {}
+        // Dispatch custom event so Navbar updates immediately
+        window.dispatchEvent(new Event("trainfree_profile_updated"));
         // If PDF not ready yet, retry up to 5 times
         if (!data.pdf_available && retries < 5) {
           setTimeout(() => fetchProfile(userId, retries + 1), 3000);
@@ -434,19 +470,20 @@ export default function VoiceInterface({
     setStatusText("");
     setRepInfo(null);
     setProfileData(null);
+    setConversationClosed(false);
+    setTodayWorkout(null);
+    setSelectedExercise(null);
+    setCompletedExercises([]);
+    setCurrentSets(0);
+    setRestTimer(null);
+    setBheemaAgentTranscript("");
     sessionIdRef.current = null;
     userIdRef.current = null;
 
     if (agent === "mika") {
       initMikaAndVoice();
     } else if (agent === "bheema") {
-      setMessages([
-        {
-          role: "assistant",
-          content:
-            "I'm Bheema, your personal trainer. Press the mic button to start talking with me. I can see you exercise via your camera too!",
-        },
-      ]);
+      connectBheemaVoice();
     }
 
     return cleanup;
@@ -461,7 +498,7 @@ export default function VoiceInterface({
       const resp = await fetch(`${API_BASE}/onboarding/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ user_id: authUser?.id || undefined }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
@@ -621,7 +658,7 @@ export default function VoiceInterface({
 
       // 3. Open direct WS to OpenAI
       const ws = new WebSocket(
-        "wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5",
+        "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
         ["realtime", `openai-insecure-api-key.${ephemeralKey}`, "openai-beta.realtime-v1"]
       );
       realtimeWsRef.current = ws;
@@ -673,7 +710,9 @@ export default function VoiceInterface({
         syncedMsgCountRef.current = messagesRef.current.length;
 
         if (currentMessages.length > 0) {
-          for (const msg of currentMessages) {
+          // Limit to last 8 messages to prevent context bloat and slow responses
+          const replayMsgs = currentMessages.slice(-8);
+          for (const msg of replayMsgs) {
             ws.send(JSON.stringify({
               type: "conversation.item.create",
               item: {
@@ -691,7 +730,14 @@ export default function VoiceInterface({
           }));
           ws.send(JSON.stringify({ type: "response.create" }));
         } else {
-          // First time — let Mika greet
+          // First time — send explicit trigger so model reliably greets
+          ws.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message", role: "user",
+              content: [{ type: "input_text", text: "[SESSION_START] User just connected. Begin with Step 1 — greet and ask their name." }],
+            },
+          }));
           ws.send(JSON.stringify({ type: "response.create" }));
         }
       };
@@ -785,6 +831,17 @@ export default function VoiceInterface({
                 }
               }
 
+              // Detect conversation end — farewell after onboarding
+              const farewellPattern = /\b(bye|goodbye|farewell|take care|see you|good luck|amazing.*journey|best of luck)\b/i;
+              if (onboardingCompleteRef.current && farewellPattern.test(displayText)) {
+                setConversationClosed(true);
+                // Stop voice after farewell audio finishes
+                setTimeout(() => {
+                  cleanupVoice();
+                  setStatusText("Conversation complete");
+                }, 3000);
+              }
+
               setMessages((prev) => {
                 const next = [...prev, { role: "assistant" as const, content: displayText }];
                 syncedMsgCountRef.current = next.length;
@@ -800,6 +857,48 @@ export default function VoiceInterface({
           case "response.audio.delta":
             // Only play audio when voice mode is active (not paused)
             if (data.delta && isListeningRef.current) playAudioChunk(data.delta);
+            break;
+
+          // Fallback: handle text-only responses (if model sends text instead of audio)
+          case "response.text.delta":
+            if (data.delta) {
+              currentAssistantText += data.delta;
+              const cleaned = currentAssistantText.replace(/PROFILE_COMPLETE:\{[^}]*\}?/g, "").trim();
+              setAgentTranscript(cleaned);
+            }
+            break;
+
+          case "response.text.done":
+            if (data.text) {
+              const rawText = data.text.trim();
+              let displayText = rawText;
+              if (rawText.includes("PROFILE_COMPLETE:")) {
+                displayText = rawText.replace(/PROFILE_COMPLETE:\{[^}]*\}/g, "").trim();
+                if (!displayText) displayText = "Your profile is complete! Generating your plan now...";
+                setOnboardingComplete(true);
+                if (userIdRef.current) {
+                  setTimeout(() => fetchProfile(userIdRef.current!), 2000);
+                }
+              }
+              // Detect farewell in text response too
+              const textFarewellPattern = /\b(bye|goodbye|farewell|take care|see you|good luck|amazing.*journey|best of luck)\b/i;
+              if (onboardingCompleteRef.current && textFarewellPattern.test(displayText)) {
+                setConversationClosed(true);
+                setTimeout(() => {
+                  cleanupVoice();
+                  setStatusText("Conversation complete");
+                }, 3000);
+              }
+              setMessages((prev) => {
+                const next = [...prev, { role: "assistant" as const, content: displayText }];
+                syncedMsgCountRef.current = next.length;
+                return next;
+              });
+              setAgentTranscript("");
+              saveVoiceTranscript(lastUserText, rawText);
+              currentAssistantText = "";
+              lastUserText = "";
+            }
             break;
 
           case "response.audio.done":
@@ -889,176 +988,197 @@ export default function VoiceInterface({
     }
   }, [isListening, onboardingComplete, connectMikaVoice]);
 
-  // ─── BHEEMA: Connect realtime voice WS ─────────────────────────
+  // ─── BHEEMA: Connect voice (direct OpenAI WS with ephemeral key) ─
   const connectBheemaVoice = useCallback(async () => {
-    const sessionId = "bheema-" + Date.now();
     setStatusText("Connecting to Coach Bheema...");
-
-    const wsUrl = `${WS_BASE}/realtime/ws/${sessionId}`;
-    const ws = new WebSocket(wsUrl);
-    realtimeWsRef.current = ws;
-
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: "config",
-          user_id: userIdRef.current || "",
-          vision_session_id: sessionId,
-        })
-      );
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        switch (msg.type) {
-          case "audio":
-            playAudioChunk(msg.data);
-            break;
-          case "transcript":
-            if (msg.role === "assistant" && msg.text) {
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (
-                  last &&
-                  last.role === "assistant" &&
-                  !last.content.startsWith("I'm Bheema")
-                ) {
-                  return [
-                    ...prev.slice(0, -1),
-                    { ...last, content: last.content + msg.text },
-                  ];
-                }
-                return [...prev, { role: "assistant", content: msg.text }];
-              });
-            }
-            break;
-          case "user_transcript":
-            if (msg.text) {
-              setMessages((prev) => [
-                ...prev,
-                { role: "user", content: msg.text },
-              ]);
-              setTranscript("");
-            }
-            break;
-          case "status":
-            setStatusText(msg.message || "");
-            if (msg.message === "listening") setTranscript("Listening...");
-            break;
-          case "play_music":
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: "Music playing..." },
-            ]);
-            break;
-          case "stop_music":
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: "Music stopped." },
-            ]);
-            break;
-          case "rest_timer":
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "system",
-                content: `Rest timer: ${msg.seconds}s — ${msg.message || "Take a break!"}`,
-              },
-            ]);
-            break;
-          case "rep_sync":
-            setRepInfo({
-              reps: msg.reps || 0,
-              target: msg.target_reps || 0,
-              sets: msg.sets_completed || 0,
-              targetSets: msg.target_sets || 0,
-            });
-            break;
-          case "error":
-            setMessages((prev) => [
-              ...prev,
-              { role: "system", content: `Error: ${msg.message}` },
-            ]);
-            break;
-        }
-      } catch {}
-    };
-
-    ws.onerror = () => {
-      setStatusText("Connection error");
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content:
-            "WebSocket connection error. Is the backend running on port 8080?",
-        },
-      ]);
-    };
-
-    ws.onclose = () => {
-      setStatusText("Disconnected");
-      setIsListening(false);
-    };
-
-    // Start mic
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-      const audioCtx = new AudioContext({ sampleRate: 24000 });
-      audioContextRef.current = audioCtx;
-      const actualRate = audioCtx.sampleRate;
-      const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
+      // 1. Get ephemeral key + today's workout
+      const tokenRes = await fetch("/api/bheema-realtime", { method: "POST" });
+      if (!tokenRes.ok) throw new Error(`Token fetch failed: ${tokenRes.status}`);
+      const tokenData = await tokenRes.json();
+      const ephemeralKey = tokenData.client_secret?.value;
+      if (!ephemeralKey) throw new Error("No ephemeral key");
 
-      processor.onaudioprocess = (e) => {
-        if (
-          !realtimeWsRef.current ||
-          realtimeWsRef.current.readyState !== WebSocket.OPEN
-        )
-          return;
-        const inputData = e.inputBuffer.getChannelData(0);
-        const resampled =
-          actualRate !== 24000
-            ? resample(inputData, actualRate, 24000)
-            : inputData;
-        const base64 = float32ToPcm16Base64(resampled);
-        realtimeWsRef.current.send(
-          JSON.stringify({ type: "audio", data: base64 })
-        );
+      // Store today's workout for exercise picker
+      if (tokenData.workout) {
+        setTodayWorkout(tokenData.workout);
+      }
+
+      // 2. AudioContext
+      const audioCtx = new AudioContext({ sampleRate: 24000 });
+      await audioCtx.resume();
+      audioContextRef.current = audioCtx;
+
+      // 3. Open direct WS to OpenAI
+      const ws = new WebSocket(
+        "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
+        ["realtime", `openai-insecure-api-key.${ephemeralKey}`, "openai-beta.realtime-v1"]
+      );
+      realtimeWsRef.current = ws;
+
+      let currentAssistantText = "";
+      let sessionConfigured = false;
+      let micStarted = false;
+
+      const startMic = async () => {
+        if (micStarted) return;
+        micStarted = true;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+          });
+          mediaStreamRef.current = stream;
+          const source = audioCtx.createMediaStreamSource(stream);
+          sourceNodeRef.current = source;
+          const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+          processorRef.current = processor;
+
+          processor.onaudioprocess = (e) => {
+            if (!realtimeWsRef.current || realtimeWsRef.current.readyState !== WebSocket.OPEN) return;
+            if (!isListeningRef.current) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            const ratio = audioCtx.sampleRate / 24000;
+            const outputLength = Math.floor(inputData.length / ratio);
+            const output = new Float32Array(outputLength);
+            for (let i = 0; i < outputLength; i++) output[i] = inputData[Math.floor(i * ratio)];
+            const base64 = float32ToPcm16Base64(output);
+            realtimeWsRef.current.send(JSON.stringify({ type: "input_audio_buffer.append", audio: base64 }));
+          };
+
+          source.connect(processor);
+          const micSink = audioCtx.createGain();
+          micSink.gain.value = 0;
+          micSink.connect(audioCtx.destination);
+          micSinkNodeRef.current = micSink;
+          processor.connect(micSink);
+        } catch (e: any) {
+          setMessages((prev) => [...prev, { role: "system", content: `Mic access denied: ${e.message}` }]);
+        }
       };
 
-      source.connect(processor);
-      // Silent sink — prevents mic audio from playing through speakers (echo)
-      const micSink = audioCtx.createGain();
-      micSink.gain.value = 0;
-      micSink.connect(audioCtx.destination);
-      processor.connect(micSink);
-      setIsListening(true);
-      setStatusText("Connected! Coach Bheema is ready.");
+      ws.onopen = () => {
+        setStatusText("Waiting for session...");
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case "session.created":
+          case "session.updated":
+            if (!sessionConfigured) {
+              sessionConfigured = true;
+              isListeningRef.current = true;
+              setIsListening(true);
+              setStatusText("Bheema is listening");
+              // Trigger initial greeting
+              ws.send(JSON.stringify({ type: "response.create" }));
+              startMic();
+            }
+            break;
+
+          case "input_audio_buffer.speech_started":
+            speechStartRef.current = Date.now();
+            setTranscript("Listening...");
+            break;
+
+          case "input_audio_buffer.speech_stopped":
+            setTranscript("");
+            break;
+
+          case "conversation.item.input_audio_transcription.completed": {
+            const t = (data.transcript || "").trim();
+            if (!t || t.length < 2) break;
+
+            // ── Transcript-level hallucination filter ──
+            const nonAscii = t.replace(/[a-zA-Z0-9\s.,!?'"@\-_:;()]/g, "");
+            if (t.length > 0 && nonAscii.length / t.length > 0.3) break;
+            if (/^(hmm|um|uh|ah|mhm|er|oh|hm|mm|uh-huh|okay|ok)\.?$/i.test(t)) break;
+            const speechDuration = Date.now() - speechStartRef.current;
+            if (speechDuration < 800 && /^(bye|the|thank you|thanks|peace|see you|goodbye|hello|hey|hi|yes|no|yeah|right|sure|yep)\.?$/i.test(t)) break;
+            if (/thank you for watching|subscribe|like and subscribe|peace be with|shabbat shalom|see you soon|take your time|see you next|thanks for listening|thank you so much/i.test(t)) break;
+            const words = t.split(/\s+/);
+            if (words.length >= 3 && new Set(words).size === 1) break;
+
+            setTranscript("");
+            setMessages((prev) => [...prev, { role: "user" as const, content: t }]);
+            break;
+          }
+
+          case "response.audio_transcript.delta":
+            if (data.delta) {
+              currentAssistantText += data.delta;
+              setBheemaAgentTranscript(currentAssistantText);
+            }
+            break;
+
+          case "response.audio_transcript.done":
+            if (data.transcript) {
+              const text = data.transcript.trim();
+              setMessages((prev) => [...prev, { role: "assistant" as const, content: text }]);
+              setBheemaAgentTranscript("");
+              currentAssistantText = "";
+            }
+            break;
+
+          case "response.audio.delta":
+            if (data.delta && isListeningRef.current) playAudioChunk(data.delta);
+            break;
+
+          case "response.audio.done":
+          case "response.done":
+            break;
+
+          case "error":
+            console.error("OpenAI Realtime error:", data.error);
+            setMessages((prev) => [...prev, { role: "system", content: `Voice error: ${data.error?.message || "Unknown"}` }]);
+            break;
+        }
+      };
+
+      ws.onerror = () => {
+        setStatusText("Voice connection error");
+        setIsListening(false);
+      };
+
+      ws.onclose = () => {
+        setStatusText("Disconnected");
+        setIsListening(false);
+      };
+
     } catch (e: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content: `Microphone access denied: ${e.message}`,
-        },
-      ]);
-      setStatusText("Mic access denied");
+      setStatusText("Voice failed");
+      setMessages((prev) => [...prev, { role: "system", content: `Voice connection failed: ${e.message}` }]);
     }
   }, [playAudioChunk]);
 
-  // ─── BHEEMA: Toggle mic ────────────────────────────────────────
+  // ─── BHEEMA: Toggle mic (mute/unmute, keep session alive) ──────
   const toggleBheemaListening = useCallback(() => {
     if (isListening) {
-      cleanupVoice();
-      setStatusText("Disconnected");
+      // PAUSE: mute mic, keep WS alive
+      isListeningRef.current = false;
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => (t.enabled = false));
+      }
+      if (realtimeWsRef.current?.readyState === WebSocket.OPEN) {
+        realtimeWsRef.current.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
+      }
+      setIsListening(false);
+      setStatusText("Voice paused");
     } else {
-      connectBheemaVoice();
+      if (realtimeWsRef.current?.readyState === WebSocket.OPEN) {
+        // Resume: unmute mic
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => (t.enabled = true));
+        }
+        isListeningRef.current = true;
+        setIsListening(true);
+        setStatusText("Bheema is listening");
+      } else {
+        // WS closed — full reconnect
+        connectBheemaVoice();
+      }
     }
-  }, [isListening, cleanupVoice, connectBheemaVoice]);
+  }, [isListening, connectBheemaVoice]);
 
   // ─── BHEEMA: Toggle camera ─────────────────────────────────────
   const toggleCamera = useCallback(async () => {
@@ -1099,12 +1219,13 @@ export default function VoiceInterface({
       visionWsRef.current = visionWs;
 
       visionWs.onopen = () => {
+        const exercise = selectedExercise;
         visionWs.send(
           JSON.stringify({
             type: "start",
-            exercise: "squat",
-            target_reps: 10,
-            target_sets: 3,
+            exercise: exercise?.vision_key || "squat",
+            target_reps: exercise?.reps || 10,
+            target_sets: exercise?.sets || 3,
           })
         );
         visionIntervalRef.current = setInterval(() => {
@@ -1211,7 +1332,9 @@ export default function VoiceInterface({
                     ? isListening
                       ? "Voice Active"
                       : "Chat Mode"
-                    : "Voice Mode"}
+                    : isListening
+                      ? "Voice Active"
+                      : "Paused"}
                 </span>
                 {statusText && (
                   <span className="text-[10px] text-white/30 ml-2">
@@ -1285,8 +1408,8 @@ export default function VoiceInterface({
                 </div>
               </div>
 
-              {/* Center: Orb + Waveform + Status */}
-              <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
+              {/* Center: Orb + Waveform + Status (hidden when conversation closed) */}
+              <div className={`flex flex-col items-center justify-center relative min-h-0 transition-all duration-500 ${conversationClosed ? "h-0 overflow-hidden opacity-0" : "flex-1"}`}>
                 <m.div
                   className="absolute inset-0 pointer-events-none"
                   animate={{ opacity: isListening ? 1 : 0.4 }}
@@ -1369,14 +1492,27 @@ export default function VoiceInterface({
                 </div>
               </div>
 
-              {/* Profile cards after onboarding */}
+              {/* Profile cards — show during onboarding complete OR conversation closed */}
               {onboardingComplete && profileData && (
-                <div className="px-6 pb-4">
+                <div className={`px-6 pb-4 ${conversationClosed ? "flex-1 overflow-y-auto" : ""}`}>
+                  {conversationClosed && (
+                    <m.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="max-w-2xl mx-auto mb-4 text-center"
+                    >
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-2">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Conversation Complete
+                      </div>
+                      <p className="text-white/30 text-xs">Your personalized plan has been generated and sent to your email!</p>
+                    </m.div>
+                  )}
                   <ProfileCards profile={profileData} />
                 </div>
               )}
 
-              {/* Chat input — always visible */}
+              {/* Chat input — visible only when onboarding not complete */}
               {!onboardingComplete && (
                 <m.div
                   initial={{ opacity: 0, y: 20 }}
@@ -1413,8 +1549,46 @@ export default function VoiceInterface({
               )}
             </div>
           ) : (
-            /* ══════════ BHEEMA: Voice ══════════ */
+            /* ══════════ BHEEMA: Voice + Exercise Picker ══════════ */
             <div className="flex-1 flex flex-col min-h-0">
+              {/* Transcript area */}
+              <div
+                ref={scrollContainerRef}
+                className="shrink-0 px-6 py-4 max-h-48 overflow-y-auto"
+                style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
+              >
+                <div className="max-w-2xl mx-auto">
+                  {(messages.length > 0 || bheemaAgentTranscript) ? (
+                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, wordBreak: "break-word" }}>
+                      {messages.map((msg, i) => (
+                        <span key={i}>
+                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                          {msg.role === "user" ? (
+                            <span className="text-orange-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
+                          ) : msg.role === "system" ? (
+                            <span className="text-orange-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
+                          ) : (
+                            <span className="text-orange-50">{msg.content}</span>
+                          )}
+                        </span>
+                      ))}
+                      {bheemaAgentTranscript && (
+                        <>
+                          {messages.length > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
+                          <span className="text-orange-50" style={{ opacity: 0.6 }}>{bheemaAgentTranscript}</span>
+                        </>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-center text-white/20 text-sm mt-4">
+                      Connecting to Coach Bheema...
+                    </p>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* Center: Orb + Camera + Controls */}
               <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
                 <m.div
                   className="absolute inset-0 pointer-events-none"
@@ -1451,6 +1625,23 @@ export default function VoiceInterface({
                 )}
                 <canvas ref={canvasRef} className="hidden" />
 
+                {/* Rest timer overlay */}
+                {restTimer && (
+                  <m.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute top-4 left-4 bg-orange-500/15 border border-orange-500/25 rounded-2xl px-5 py-3 z-10"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Timer className="w-4 h-4 text-orange-400" />
+                      <span className="text-orange-300 font-bold text-lg">{restTimer.seconds}s</span>
+                    </div>
+                    <p className="text-white/40 text-[10px] mt-0.5">{restTimer.message}</p>
+                  </m.div>
+                )}
+
+                {/* Orb — click to toggle voice */}
                 <m.div
                   initial={{ opacity: 0, scale: 0.5 }}
                   animate={{
@@ -1465,11 +1656,14 @@ export default function VoiceInterface({
                       damping: 15,
                     },
                   }}
+                  className="cursor-pointer"
+                  onClick={toggleBheemaListening}
+                  title={isListening ? "Click to pause voice" : "Click for voice mode"}
                 >
                   <ReactiveOrb
                     color="#fb923c"
                     isActive={isListening}
-                    size={300}
+                    size={280}
                   />
                 </m.div>
 
@@ -1483,12 +1677,12 @@ export default function VoiceInterface({
                     isActive={isListening}
                     color="#fb923c"
                     width={360}
-                    height={80}
+                    height={70}
                   />
                 </m.div>
 
                 {/* Status */}
-                <div className="h-14 flex flex-col items-center justify-center mt-1">
+                <div className="h-10 flex flex-col items-center justify-center mt-1">
                   <AnimatePresence mode="wait">
                     {transcript ? (
                       <m.p
@@ -1506,151 +1700,128 @@ export default function VoiceInterface({
                         />
                         &rdquo;
                       </m.p>
-                    ) : isProcessing ? (
-                      <m.div
-                        key="processing"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-2 text-xs text-orange-400/60"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                        <span>Bheema is thinking...</span>
-                      </m.div>
                     ) : isListening ? (
-                      <m.p
-                        key="listening"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-orange-400/50"
-                      >
-                        Listening...
+                      <m.p key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-orange-400/50">
+                        Listening... tap orb to pause
                       </m.p>
                     ) : (
-                      <m.p
-                        key="idle"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs text-white/20"
-                      >
-                        Ready
+                      <m.p key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-xs text-white/20">
+                        {statusText || "Tap orb for voice mode"}
                       </m.p>
                     )}
                   </AnimatePresence>
                 </div>
 
-                {/* Mic + Camera buttons */}
+                {/* Camera button */}
                 <m.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4, duration: 0.5 }}
-                  className="flex items-center gap-6 mt-2"
+                  className="flex items-center gap-4 mt-1"
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <m.button
-                      onClick={toggleCamera}
-                      whileHover={{ scale: 1.08 }}
-                      whileTap={{ scale: 0.88 }}
-                      className={`rounded-full flex items-center justify-center transition-all duration-300 ${
-                        cameraActive
-                          ? "bg-orange-500/80 shadow-[0_0_30px_rgba(251,146,60,0.3)]"
-                          : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30"
-                      }`}
-                      style={{ width: 52, height: 52 }}
-                    >
-                      {cameraActive ? (
-                        <CameraOff className="w-5 h-5 text-white" />
-                      ) : (
-                        <Camera className="w-5 h-5 text-orange-400" />
-                      )}
-                    </m.button>
-                    <p className="text-[10px] text-white/20">
-                      {cameraActive ? "Stop camera" : "Start camera"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-3">
-                    <m.button
-                      onClick={toggleBheemaListening}
-                      whileHover={{ scale: 1.08 }}
-                      whileTap={{ scale: 0.88 }}
-                      animate={{
-                        scale: isListening ? [1, 1.04, 1] : 1,
-                      }}
-                      transition={
-                        isListening
-                          ? {
-                              duration: 1.5,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            }
-                          : {}
-                      }
-                      className={`relative rounded-full flex items-center justify-center transition-all duration-300 ${
-                        isListening
-                          ? "bg-orange-500 mic-pulse shadow-[0_0_50px_rgba(251,146,60,0.4)]"
-                          : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30"
-                      }`}
-                      style={{ width: 68, height: 68 }}
-                    >
-                      <AnimatePresence mode="wait">
-                        {isListening ? (
-                          <m.div
-                            key="off"
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.5, opacity: 0 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            <MicOff className="w-6 h-6 text-white" />
-                          </m.div>
-                        ) : (
-                          <m.div
-                            key="on"
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.5, opacity: 0 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            <Mic className="w-6 h-6 text-orange-400" />
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                    </m.button>
-                    <p className="text-[11px] text-white/20">
-                      {isListening ? "Tap to stop" : "Tap to speak"}
-                    </p>
-                  </div>
+                  <m.button
+                    onClick={toggleCamera}
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.88 }}
+                    className={`rounded-full flex items-center gap-2 px-4 py-2.5 transition-all duration-300 text-xs font-medium ${
+                      cameraActive
+                        ? "bg-orange-500/80 text-white shadow-[0_0_30px_rgba(251,146,60,0.3)]"
+                        : "bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 hover:border-orange-400/30 text-orange-400"
+                    }`}
+                  >
+                    {cameraActive ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                    {cameraActive ? "Stop Camera" : "Start Camera"}
+                  </m.button>
                 </m.div>
               </div>
 
-              {/* Bheema messages — paragraph format */}
-              {messages.length > 1 && (
+              {/* Exercise Picker — bottom panel */}
+              {todayWorkout && todayWorkout.exercises.length > 0 && (
                 <m.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="shrink-0 px-6 py-4 border-t border-white/5 max-h-56 overflow-y-auto"
-                  style={{ overscrollBehavior: "contain", scrollbarWidth: "none" }}
+                  transition={{ delay: 0.3, duration: 0.4 }}
+                  className="shrink-0 px-6 py-4 border-t border-white/5 bg-[#0a0a0a]"
                 >
                   <div className="max-w-2xl mx-auto">
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, wordBreak: "break-word" }}>
-                      {messages.slice(1).map((msg, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="text-white/20" style={{ margin: "0 2px" }}>{" \u00b7 "}</span>}
-                          {msg.role === "user" ? (
-                            <span className="text-orange-300" style={{ fontWeight: 600, fontStyle: "italic" }}>{msg.content}</span>
-                          ) : msg.role === "system" ? (
-                            <span className="text-orange-300/60" style={{ fontSize: 12 }}>{msg.content}</span>
-                          ) : (
-                            <span className="text-orange-50">{msg.content}</span>
-                          )}
-                        </span>
-                      ))}
+                    <div className="flex items-center gap-2 mb-3">
+                      <Dumbbell className="w-4 h-4 text-orange-400" />
+                      <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+                        {todayWorkout.today} — {todayWorkout.focus}
+                      </span>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                      {todayWorkout.exercises.map((ex, i) => {
+                        const isSelected = selectedExercise?.name === ex.name;
+                        const isDone = completedExercises.includes(ex.name);
+                        return (
+                          <m.button
+                            key={i}
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => {
+                              setSelectedExercise(ex);
+                              setCurrentSets(0);
+                              setRepInfo(null);
+                              // If camera is active, restart vision with new exercise
+                              if (cameraActive && visionWsRef.current?.readyState === WebSocket.OPEN) {
+                                visionWsRef.current.send(JSON.stringify({
+                                  type: "start",
+                                  exercise: ex.vision_key,
+                                  target_reps: ex.reps,
+                                  target_sets: ex.sets,
+                                }));
+                              }
+                              // Inject exercise selection into voice conversation
+                              if (realtimeWsRef.current?.readyState === WebSocket.OPEN) {
+                                realtimeWsRef.current.send(JSON.stringify({
+                                  type: "conversation.item.create",
+                                  item: {
+                                    type: "message",
+                                    role: "user",
+                                    content: [{ type: "input_text", text: `I want to do ${ex.name} now. ${ex.sets} sets of ${ex.reps} reps.` }],
+                                  },
+                                }));
+                                realtimeWsRef.current.send(JSON.stringify({ type: "response.create" }));
+                              }
+                            }}
+                            className={`shrink-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                              isDone
+                                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                                : isSelected
+                                ? "bg-orange-500/20 border border-orange-500/30 text-orange-300 shadow-[0_0_15px_rgba(251,146,60,0.15)]"
+                                : "bg-white/[0.04] border border-white/8 text-white/50 hover:bg-white/[0.07] hover:border-orange-400/20 hover:text-white/70"
+                            }`}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : isSelected ? (
+                              <ChevronRight className="w-3.5 h-3.5 text-orange-400" />
+                            ) : (
+                              <Dumbbell className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                            <span>{ex.name}</span>
+                            <span className="text-[10px] opacity-50">{ex.sets}x{ex.reps}</span>
+                          </m.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </m.div>
+              )}
+
+              {/* Rest day message */}
+              {todayWorkout && todayWorkout.exercises.length === 0 && (
+                <m.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="shrink-0 px-6 py-4 border-t border-white/5"
+                >
+                  <div className="max-w-2xl mx-auto text-center">
+                    <p className="text-white/40 text-sm">
+                      {todayWorkout.today} — Active Recovery Day
                     </p>
-                    <div ref={messagesEndRef} />
+                    <p className="text-white/20 text-xs mt-1">Ask Bheema for stretching guidance!</p>
                   </div>
                 </m.div>
               )}
